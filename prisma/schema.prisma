@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int            @id @default(autoincrement())
+  username           String         @unique
+  email              String         @unique
+  password           String?
+  isActive           Boolean        @default(false) @map("is_active")
+  isGoogleAccount    Boolean        @default(false) @map("is_google_account")
+  activationToken    String?        @unique @map("activation_token")
+  resetPasswordToken String?        @unique @map("reset_password_token")
+  roleId             Int
+  deviceToken        String?        @map("device_token")
+  transactions       Transaction[]
+  fixedExpenses      FixedExpense[]
+  salary             Salary?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  role               Role           @relation(fields: [roleId], references: [id])
+
+  @@index([username, email], name: "user_search_idx")
+}
+
+model Role {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  users User[]
+
+  @@map("roles")
+}
+
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Float
+  date        DateTime
+  category    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FixedExpense {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Float
+  category    String
+  dueDate     DateTime
+  reminder    Boolean
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Salary {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  user         User          @relation(fields: [userId], references: [id])
+  amount       Float
+  distribution Distribution?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Distribution {
+  id               Int      @id @default(autoincrement())
+  salaryId         Int      @unique()
+  salary           Salary   @relation(fields: [salaryId], references: [id])
+  fixedExpenses    Float
+  variableExpenses Float
+  savings          Float
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
