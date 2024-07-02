@@ -26,6 +26,7 @@ model User {
   role               Role           @relation(fields: [roleId], references: [id])
 
   @@index([username, email], name: "user_search_idx")
+  @@map("users")
 }
 
 model Role {
@@ -46,6 +47,8 @@ model Transaction {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("transactions")
 }
 
 model FixedExpense {
@@ -59,6 +62,8 @@ model FixedExpense {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("fixed_expenses")
 }
 
 model Salary {
@@ -69,6 +74,8 @@ model Salary {
   distribution Distribution?
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("salaries")
 }
 
 model Distribution {
@@ -80,4 +87,6 @@ model Distribution {
   savings          Float
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("distributions")
 }
