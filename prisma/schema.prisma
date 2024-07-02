@@ -16,13 +16,13 @@ model User {
   isGoogleAccount    Boolean        @default(false) @map("is_google_account")
   activationToken    String?        @unique @map("activation_token")
   resetPasswordToken String?        @unique @map("reset_password_token")
-  roleId             Int
+  roleId             Int            @map("role_id")
   deviceToken        String?        @map("device_token")
   transactions       Transaction[]
   fixedExpenses      FixedExpense[]
   salary             Salary?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
   role               Role           @relation(fields: [roleId], references: [id])
 
   @@index([username, email], name: "user_search_idx")
@@ -38,46 +38,46 @@ model Role {
 
 model Transaction {
   id          Int      @id @default(autoincrement())
-  userId      Int
+  userId      Int      @unique @map("user_id")
   user        User     @relation(fields: [userId], references: [id])
   amount      Float
   date        DateTime
   category    String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 }
 
 model FixedExpense {
   id          Int      @id @default(autoincrement())
-  userId      Int
+  userId      Int      @unique @map("user_id")
   user        User     @relation(fields: [userId], references: [id])
   amount      Float
   category    String
-  dueDate     DateTime
+  dueDate     DateTime @map("due_date")
   reminder    Boolean
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 }
 
 model Salary {
   id           Int           @id @default(autoincrement())
-  userId       Int           @unique
+  userId       Int           @unique @map("user_id")
   user         User          @relation(fields: [userId], references: [id])
   amount       Float
   distribution Distribution?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
 }
 
 model Distribution {
   id               Int      @id @default(autoincrement())
-  salaryId         Int      @unique()
+  salaryId         Int      @unique() @map("salary_id")
   salary           Salary   @relation(fields: [salaryId], references: [id])
-  fixedExpenses    Float
-  variableExpenses Float
+  fixedExpenses    Float    @map("fixed_expenses")
+  variableExpenses Float    @map("variable_expenses")
   savings          Float
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 }
