@@ -8,33 +8,26 @@ datasource db {
 }
 
 model User {
-  id                 Int            @id @default(autoincrement())
-  username           String         @unique
-  email              String         @unique
-  password           String?
-  isActive           Boolean        @default(false) @map("is_active")
-  isGoogleAccount    Boolean        @default(false) @map("is_google_account")
-  activationToken    String?        @unique @map("activation_token")
-  resetPasswordToken String?        @unique @map("reset_password_token")
-  roleId             Int            @map("role_id")
-  deviceToken        String?        @map("device_token")
-  transactions       Transaction[]
-  fixedExpenses      FixedExpense[]
-  salary             Salary?
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-  role               Role           @relation(fields: [roleId], references: [id])
+  id              Int            @id @default(autoincrement())
+  username        String         @unique
+  isActive        Boolean        @default(false) @map("is_active")
+  isGoogleAccount Boolean        @default(false) @map("is_google_account")
+  activationToken String?        @unique @map("activation_token")
+  transactions    Transaction[]
+  fixedExpenses   FixedExpense[]
+  salary          Salary?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  apiKey          String?        @unique @map("api_key")
+  enable2FA       Boolean        @default(false) @map("enable_2fa")
+  twoFASecret     String?        @map("2fa_secret")
+  password        String?
+  email           String         @unique
+  lastName        String?        @map("last_name")
+  firstName       String?        @map("first_name")
 
   @@index([username, email], name: "user_search_idx")
   @@map("users")
-}
-
-model Role {
-  id    Int    @id @default(autoincrement())
-  name  String @unique
-  users User[]
-
-  @@map("roles")
 }
 
 model Transaction {
