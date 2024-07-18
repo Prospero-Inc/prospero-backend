@@ -21,6 +21,7 @@ services:
     container_name: nest-docker-postgres
     environment:
       - PORT=${PORT}
+      - DATABASE_URL=postgresql://postgres:1234567@prospero-db:5432/prospero
     ports:
       - '3000:3000'
     depends_on:
