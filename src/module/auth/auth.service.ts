@@ -32,8 +32,6 @@ export class AuthService {
       };
     }
 
-    console.log('alooo', user);
-
     const payload = { email: user.email, userId: user.id };
 
     if (passwordMatched) {
@@ -60,7 +58,7 @@ export class AuthService {
     }
 
     const secret = speakeasy.generateSecret();
-    console.log('Este es el secreto con speakeasy', secret);
+    console.log('awwwww', secret);
     user.twoFASecret = secret.base32;
     await this.userService.updateSecretKey(user.id, user.twoFASecret);
     return { secret: user.twoFASecret };
@@ -75,24 +73,23 @@ export class AuthService {
 
       // extract his 2FA secret
       const secret = user.twoFASecret;
-
-      // verify the secret with token by calling the speakeasy verify method
-      const verified = speakeasy.totp.verify({
+      console.log({
         secret,
-        encoding: 'base32',
-        token,
+        user,
       });
 
-      // if validated then sends the json web token in the response
-      if (verified) {
-        return {
-          verified: true,
-        };
-      } else {
-        return {
-          verified: false,
-        };
-      }
+      const verified = speakeasy.totp.verify({
+        secret: secret,
+        token: token,
+        encoding: 'base32',
+        window: 1,
+      });
+
+      console.log('verified', verified);
+
+      return {
+        verified: verified,
+      };
     } catch (error) {
       throw new UnauthorizedException('Error verifying token');
     }

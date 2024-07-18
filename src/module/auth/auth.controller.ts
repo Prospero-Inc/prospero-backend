@@ -35,7 +35,6 @@ export class AuthController {
   @Get('enable-2fa')
   @UseGuards(JwtAuthGuard)
   enable2FA(@Request() req): Promise<Enable2FAType> {
-    console.log('enable-2fa:: ', req.user);
     return this.authService.enable2FA(req.user.userId);
   }
 
