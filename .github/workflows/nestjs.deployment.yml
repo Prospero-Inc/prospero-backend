@@ -22,13 +22,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-
-      - name: Install Doppler CLI
-        run: |
-          curl -sLf --retry 3 --tlsv1.2 --proto "=https" 'https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key' | sudo apt-key add -
-          echo "deb https://packages.doppler.com/public/cli/deb/debian any-version main" | sudo tee /etc/apt/sources.list.d/doppler-cli.list
-          sudo apt-get update && sudo apt-get -y install doppler
-
+          
       - name: Authenticate with Doppler
         run: |
           echo ${{ secrets.DOPPLER_TOKEN_API }} | doppler login --token
