@@ -1,19 +1,6 @@
 version: '3.5'
 
 services:
-  prospero-db:
-    container_name: ecommerce_database
-    image: postgres:16.2
-    restart: always
-    volumes:
-      - ./postgres:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=1234567
-      - POSTGRES_DB=prospero
-
   app:
     build:
       context: .
@@ -24,7 +11,5 @@ services:
       - DATABASE_URL=postgresql://postgres:1234567@prospero-db:5432/prospero
     ports:
       - '3000:3000'
-    depends_on:
-      - prospero-db
     volumes:
       - ./src:/app/src
