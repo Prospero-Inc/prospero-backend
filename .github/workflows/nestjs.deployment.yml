@@ -2,26 +2,31 @@ name: Node.js CI
 
 on:
   push:
-    branches: [ "developer" ]
+    branches: ['developer']
   pull_request:
-    branches: [ "developer" ]
+    branches: ['developer']
 
 jobs:
   build:
-
     runs-on: self-hosted
 
     strategy:
       matrix:
         node-version: [18.16.0]
-    env:
-      DATABASE_URL: ${{secrets.DATABASE_URL}}
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - run: npm ci
-    - run: npm run build --if-present
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Build Docker image
+        run: |
+          docker build --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} -t prospero-app .
+
+      - name: Run Docker container
+        run: |
+          docker run -e DATABASE_URL=${{ secrets.DATABASE_URL }} -p 3000:3000 prospero-app

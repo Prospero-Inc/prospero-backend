@@ -15,7 +15,6 @@ RUN npm install -g prisma
 RUN npx prisma generate
 
 RUN npx prisma migrate deploy
-RUN npm run migrations:up
 
 RUN npm run build
 
