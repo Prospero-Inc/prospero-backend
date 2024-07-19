@@ -22,10 +22,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-          
-      - name: Authenticate with Doppler
-        run: |
-          echo ${{ secrets.DOPPLER_TOKEN_API }} | doppler login --token
 
       - name: Build Docker image
         run: |
