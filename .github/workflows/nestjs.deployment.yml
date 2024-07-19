@@ -26,3 +26,11 @@ jobs:
       - name: Build Docker image
         run: |
           docker build --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} -t prospero-app .
+
+      - name: Run Docker container
+        run: |
+          docker run -d --name prospero-app-container -e DATABASE_URL=${{ secrets.DATABASE_URL }} prospero-app
+
+      - name: Check Docker container status
+        run: |
+          docker ps -a
