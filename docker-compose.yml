@@ -13,3 +13,9 @@ services:
       - '3000:3000'
     volumes:
       - ./src:/app/src
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    external: true
