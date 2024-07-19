@@ -12,15 +12,9 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - ./src:/usr/src/app/src
+      - ./src:/app/src
     networks:
       - my-network
-    secrets:
-      - doppler_token
-
-secrets:
-  doppler_token:
-    external: true
 
 networks:
   my-network:

@@ -25,4 +25,4 @@ jobs:
 
       - name: Build Docker image
         run: |
-          doppler run -- docker build --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} -t prospero-app .
+          docker build --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} -t prospero-app .
