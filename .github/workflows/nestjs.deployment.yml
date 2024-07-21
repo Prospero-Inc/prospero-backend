@@ -7,7 +7,7 @@ on:
     branches: ['developer']
 
 jobs:
-  create-docker-image:
+  deploy:
     runs-on: self-hosted
 
     strategy:
@@ -23,45 +23,23 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.TOKEN_DEPLOY }}
+      - name: Install dependencies
+        run: npm install
 
-      - name: Build image
+      - name: Build application
+        run: npm run build
+
+      - name: Build Docker image
+        run: docker build -t prospero-backend:latest .
+
+      - name: Stop existing container
         run: |
-          docker build -t ghcr.io/natividev/prospero-backend:latest .
-          docker push ghcr.io/natividev/prospero-backend:latest
-
-  deploy:
-    needs: create-docker-image
-
-    runs-on: self-hosted
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18.16.0'
-          cache: 'npm'
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.TOKEN_DEPLOY }}
-
-      - name: Deploy to Docker
-        run: |
-          docker pull ghcr.io/natividev/prospero-backend:latest
           docker stop prospero-backend || true
           docker rm prospero-backend || true
+
+      - name: Deploy Docker container
+        run: |
           docker run -d -p 3000:3000 --name prospero-backend \
           -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
-          ghcr.io/natividev/prospero-backend:latest \
+          prospero-backend:latest \
           doppler run -- npm run start:prod
