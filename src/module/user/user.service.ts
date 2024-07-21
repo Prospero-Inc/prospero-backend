@@ -4,28 +4,35 @@ import { User } from '@prisma/client';
 import { CreateUserDTO } from './dto/create-user.dto';
 import { v4 as uuid4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async create(data: CreateUserDTO) {
     const { firstName, lastName, email, usernName } = data;
     const apyKey = uuid4();
-    console.log('apyKey: ', apyKey);
 
     const salt = await bcrypt.genSalt(10);
     const password = await bcrypt.hash(data.password, salt);
-
-    await this.prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        username: usernName,
-        password,
-        apiKey: apyKey,
-      },
+    let user;
+    await this.prisma.$transaction(async (tx) => {
+      user = await tx.user.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          username: usernName,
+          password,
+          apiKey: apyKey,
+          activationToken: uuid4(),
+        },
+      });
+      await this.mailService.sendVerificationUsers(user);
     });
 
     return {
@@ -99,5 +106,35 @@ export class UserService {
       throw new UnauthorizedException('Could not find user 3');
     }
     return user;
+  }
+
+  async findOneInactiveByIdActivationToken(
+    id: number,
+    activationToken: string,
+  ): Promise<User> {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id,
+        activationToken: activationToken,
+        isActive: false,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Could not find user');
+    }
+    return user;
+  }
+
+  async activateUser(id: number) {
+    return await this.prisma.user.update({
+      where: {
+        id,
+      },
+      data: {
+        isActive: true,
+        activationToken: null,
+      },
+    });
   }
 }

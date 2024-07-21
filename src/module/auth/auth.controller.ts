@@ -5,6 +5,7 @@ import {
   Body,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -20,6 +21,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { ActivateUserDto } from './dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -98,5 +100,13 @@ export class AuthController {
       msg: 'authenticated with api key',
       user: req.user,
     };
+  }
+
+  @Get('/activate-account')
+  @ApiOperation({ summary: 'Activar la cuenta de usuario' })
+  @ApiResponse({ status: 200, description: 'Cuenta de usuario activada.' })
+  @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
+  async activateAccount(@Query() activateUserDto: ActivateUserDto) {
+    return await this.authService.activateUser(activateUserDto);
   }
 }

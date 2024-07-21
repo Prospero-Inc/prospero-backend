@@ -3,11 +3,9 @@ name: Node.js CI
 on:
   push:
     branches: ['developer']
-  pull_request:
-    branches: ['developer']
 
 jobs:
-  build:
+  deploy:
     runs-on: self-hosted
 
     strategy:
@@ -17,12 +15,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-
       - name: Build Docker image
+        run: docker build -t prospero-backend:latest .
+
+      - name: Stop existing container
         run: |
-          docker build --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} -t prospero-app .
+          docker stop prospero-backend || true
+          docker rm prospero-backend || true
+
+      - name: Deploy Docker container
+        run: |
+          docker run -d -p 3000:3000 --name prospero-backend \
+          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
+          prospero-backend:latest \
+          doppler run -- npm run start:prod

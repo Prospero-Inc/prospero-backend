@@ -1,10 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDTO } from '../user/dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
+import { ActivateUserDto } from './dto';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -30,6 +36,10 @@ export class AuthService {
         message: 'Invalid credentials',
         accessToken: null,
       };
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('User is not active');
     }
 
     const payload = { email: user.email, userId: user.id };
@@ -101,5 +111,15 @@ export class AuthService {
 
   async validateUserByApiKey(apiKey: string) {
     return await this.userService.findByApiKey(apiKey);
+  }
+
+  async activateUser(activateUserDto: ActivateUserDto) {
+    const { code, id } = activateUserDto;
+    const user: User =
+      await this.userService.findOneInactiveByIdActivationToken(+id, code);
+    if (!user) {
+      throw new UnprocessableEntityException('This action can not be done');
+    }
+    await this.userService.activateUser(id);
   }
 }
