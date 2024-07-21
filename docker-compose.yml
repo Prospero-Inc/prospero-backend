@@ -1,21 +1,16 @@
 version: '3.5'
 
 services:
-  app:
+  prospero:
+    container_name: prospero-service
+    init: true
+    environment:
+      - DOPPLER_TOKEN=${DOPPLER_TOKEN_API}
+    image: prospero-service
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nest-docker-postgres
-    environment:
-      - PORT=${PORT}
-      - DATABASE_URL=postgresql://postgres:1234567@prospero-db:5432/prospero
     ports:
       - '3000:3000'
     volumes:
       - ./src:/app/src
-    networks:
-      - my-network
-
-networks:
-  my-network:
-    external: true
