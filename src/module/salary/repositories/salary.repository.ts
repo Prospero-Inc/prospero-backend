@@ -33,6 +33,8 @@ export class SalaryRepository {
     return await this.prisma.salary.create({
       data: {
         userId,
+        year: 2024,
+        month: 'Enero',
         amount,
       },
     });

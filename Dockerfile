@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get purge -y --auto-remove python3 build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+# Ejecutar Prisma generate
+RUN npx prisma generate
+
 # Copiar el resto de los archivos del proyecto
 COPY . .
 
