@@ -42,6 +42,7 @@ model Transaction {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("transactions")
+  @@index([date, category], name: "transaction_date_category_idx")
 }
 
 model FixedExpense {
@@ -57,6 +58,22 @@ model FixedExpense {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("fixed_expenses")
+  @@index([dueDate, category], name: "fixed_expense_due_date_category_idx")
+}
+
+enum Mes {
+  Enero
+  Febrero
+  Marzo
+  Abril
+  Mayo
+  Junio
+  Julio
+  Agosto
+  Septiembre
+  Octubre
+  Noviembre
+  Diciembre
 }
 
 model Salary {
@@ -64,11 +81,14 @@ model Salary {
   userId       Int           @unique @map("user_id")
   user         User          @relation(fields: [userId], references: [id])
   amount       Float
+  month        Mes
+  year         Int
   distribution Distribution?
-  createdAt    DateTime      @default(now()) @map("created_at")
+  createdAt    DateTime      @default(now()) @map("created_at")  
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
   @@map("salaries")
+  @@index([month, year], name: "salary_month_year_idx")
 }
 
 model Distribution {
@@ -82,4 +102,5 @@ model Distribution {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("distributions")
+  @@index([fixedExpenses, variableExpenses, savings], name: "distribution_idx")
 }

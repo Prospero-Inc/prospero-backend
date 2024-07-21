@@ -41,6 +41,9 @@ COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/dist ./dist
 
+# Ejecutar migraciones pendientes
+RUN doppler run -- npx prisma migrate deploy
+
 # Exponer el puerto de la aplicación
 EXPOSE 3000
 
