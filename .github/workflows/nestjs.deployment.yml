@@ -61,4 +61,7 @@ jobs:
           docker pull ghcr.io/natividev/prospero-backend:latest
           docker stop prospero-backend || true
           docker rm prospero-backend || true
-          docker run -d -p 3000:3000 --name prospero-backend ghcr.io/natividev/prospero-backend:latest
+          docker run -d -p 3000:3000 --name prospero-backend \
+          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
+          ghcr.io/natividev/prospero-backend:latest \
+          doppler run -- npm run start:prod

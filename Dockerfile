@@ -1,30 +1,29 @@
-# Etapa de construcción
-FROM node:18.16.0-alpine AS build
+FROM node:18.16.0 AS builder
 
 WORKDIR /usr/src/app
 
-# Copia los archivos de definición de dependencias y realiza la instalación
 COPY package*.json ./
-RUN npm install -E && \
-    npm install -g prisma && \
-    npx prisma generate
+COPY prisma ./prisma/
 
-# Copia el resto de la aplicación y realiza la compilación
+# Install app dependencies
+RUN npm install
+
 COPY . .
+
 RUN npm run build
 
-# Etapa de producción
-FROM node:18.16.0-alpine
+FROM node:18.16.0
 
-WORKDIR /usr/src/app
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/package*.json ./
+COPY --from=builder /usr/src/app/dist ./dist
 
-# Copia solo los archivos necesarios desde la etapa de construcción
-COPY --from=build /usr/src/app/dist ./dist
-COPY --from=build /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/package*.json ./
-
-# Instala solo las dependencias de producción
-RUN npm ci --only=production
+# Install Doppler CLI in the final image
+RUN apt-get update && apt-get install -y apt-transport-https ca-certificates curl gnupg && \
+    curl -sLf --retry 3 --tlsv1.2 --proto "=https" 'https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key' | gpg --dearmor -o /usr/share/keyrings/doppler-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/doppler-archive-keyring.gpg] https://packages.doppler.com/public/cli/deb/debian any-version main" | tee /etc/apt/sources.list.d/doppler-cli.list && \
+    apt-get update && \
+    apt-get -y install doppler
 
 EXPOSE 3000
-CMD ["npm", "run", "start:dev"]
+CMD ["doppler", "run", "--", "npm", "run", "start:prod"]
