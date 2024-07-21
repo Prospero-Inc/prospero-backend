@@ -28,16 +28,16 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.TOKEN_DEPLOY}}
+          password: ${{ secrets.TOKEN_DEPLOY }}
 
       - name: Build image
         run: |
-          docker build . -tag ghcr.io/natividev/prospero-backend:latest
+          docker build -t ghcr.io/natividev/prospero-backend:latest .
           docker push ghcr.io/natividev/prospero-backend:latest
 
   deploy:
     needs: create-docker-image
-    
+
     runs-on: self-hosted
 
     steps:
@@ -54,10 +54,11 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.TOKEN_DEPLOY}}
+          password: ${{ secrets.TOKEN_DEPLOY }}
 
       - name: Deploy to Docker
         run: |
           docker pull ghcr.io/natividev/prospero-backend:latest
-          docker stop prospero-backend && docker rm prospero-backend
-          docker run -d -p 3000:3000 ghcr.io/natividev/prospero-backend:latest
+          docker stop prospero-backend || true
+          docker rm prospero-backend || true
+          docker run -d -p 3000:3000 --name prospero-backend ghcr.io/natividev/prospero-backend:latest
