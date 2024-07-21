@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { SalaryRepository } from '../repositories/salary.repository';
 import { CreateAmountDto } from '../domain/dto/create-amount.dto';
 import { SalaryDistributionStrategy } from '../strategies/salary-distribution.strategy';
@@ -14,17 +14,28 @@ export class SalaryService {
   }
 
   async distributeSalary(userId: number, amount: CreateAmountDto) {
-    if (!this.strategy) {
-      throw new Error('Strategy not set');
+    try {
+      if (!this.strategy) {
+        throw new Error('Strategy not set');
+      }
+      await await this.salaryRepository.distributeSalary(
+        userId,
+        amount,
+        this.strategy,
+      );
+
+      return { message: 'Salario distribuido exitosamente' };
+    } catch (error) {
+      throw new InternalServerErrorException('Error al distribuir el salario');
     }
-    return await this.salaryRepository.distributeSalary(
-      userId,
-      amount,
-      this.strategy,
-    );
   }
 
   async createSalary(userId: number, amount: number) {
-    return await this.salaryRepository.createSalary(userId, amount);
+    try {
+      await this.salaryRepository.createSalary(userId, amount);
+      return { message: 'Salario creado exitosamente' };
+    } catch (error) {
+      throw new InternalServerErrorException('Error al crear el salario');
+    }
   }
 }

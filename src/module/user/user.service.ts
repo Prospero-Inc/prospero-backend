@@ -32,9 +32,8 @@ export class UserService {
           activationToken: uuid4(),
         },
       });
+      await this.mailService.sendVerificationUsers(user);
     });
-
-    await this.mailService.sendVerificationUsers(user);
 
     return {
       message: 'User created successfully',

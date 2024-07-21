@@ -13,7 +13,7 @@ export class MailService {
     console.log('user', user);
     console.log('user', user);
     const configService = new ConfigService();
-    const verificationLink = `${configService.get('API_BASE_URL')}/auth/activate-account?id=${id}&code=${token}`;
+    const verificationLink = `${configService.get('API_BASE_URL')}auth/activate-account?id=${id}&code=${token}`;
     await this.mailerService.sendMail({
       to: user.email,
       subject: 'Verify your email address',
