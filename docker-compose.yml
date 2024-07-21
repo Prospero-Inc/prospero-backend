@@ -1,0 +1,16 @@
+version: '3.5'
+
+services:
+  prospero:
+    container_name: prospero-service
+    init: true
+    environment:
+      - DOPPLER_TOKEN=${DOPPLER_TOKEN_API}
+    image: prospero-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./src:/app/src
