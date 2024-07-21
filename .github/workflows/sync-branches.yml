@@ -17,4 +17,4 @@ jobs:
           from_branch: main
           message: '[auto-merge] Sync main -> developer (${{ github.sha }})'
           target_branch: developer
-          token: ${{ secrets.TOKEN_DEPLOY }}
+          token: ${{ secrets.SYNC_TOKEN }}
