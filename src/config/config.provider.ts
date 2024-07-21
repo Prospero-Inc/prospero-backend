@@ -13,6 +13,7 @@ export const configProvider = {
         // JWT_SECRET: Joi.string().required(),
         // SG_MAIL_FROM: Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
+        API_BASE_URL: Joi.string().required(),
       });
 
     const result = validationSchema.validate(env);

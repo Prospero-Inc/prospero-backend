@@ -8,4 +8,6 @@ export interface Config {
   readonly SG_MAIL_FROM: string;
 
   readonly DATABASE_URL: string;
+
+  readonly API_BASE_URL: string;
 }
