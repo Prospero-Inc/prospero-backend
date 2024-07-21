@@ -12,15 +12,15 @@ COPY prisma ./prisma/
 RUN apt-get update && apt-get install -y \
     python3 \
     build-essential \
-    && npm install \
+    && npm ci \
     && apt-get purge -y --auto-remove python3 build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+ # Copiar el resto de los archivos del proyecto
+COPY . .
+
 # Ejecutar Prisma generate
 RUN npx prisma generate
-
-# Copiar el resto de los archivos del proyecto
-COPY . .
 
 # Construir la aplicación
 RUN npm run build
@@ -40,12 +40,11 @@ RUN apt-get update && apt-get install -y apt-transport-https ca-certificates cur
 WORKDIR /usr/src/app
 
 # Copiar los archivos necesarios desde la etapa de construcción
-COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/prisma ./prisma
 
-# Ejecutar migraciones pendientes
-RUN doppler run -- npx prisma migrate deploy
+RUN npm ci --production
 
 # Exponer el puerto de la aplicación
 EXPOSE 3000
