@@ -11,6 +11,7 @@ import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
 import { ActivateUserDto } from './dto';
 import { User } from '@prisma/client';
+import { AccessTokenResponse } from './interfaces';
 
 @Injectable()
 export class AuthService {
@@ -21,9 +22,7 @@ export class AuthService {
 
   async login(
     loginDTO: LoginDTO,
-  ): Promise<
-    { accessToken: string } | { validate2FA: string; message: string }
-  > {
+  ): Promise<AccessTokenResponse | { validate2FA: string; message: string }> {
     const user = await this.userService.findOne(loginDTO.email);
 
     const passwordMatched = await bcrypt.compare(
@@ -32,10 +31,7 @@ export class AuthService {
     );
 
     if (!passwordMatched) {
-      return {
-        message: 'Invalid credentials',
-        accessToken: null,
-      };
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.isActive) {
@@ -55,6 +51,12 @@ export class AuthService {
 
       return {
         accessToken: this.jwtService.sign(payload),
+        user: {
+          id: user.id,
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          username: user.username,
+        },
       };
     }
 

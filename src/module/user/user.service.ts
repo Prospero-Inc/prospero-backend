@@ -14,30 +14,37 @@ export class UserService {
   ) {}
 
   async create(data: CreateUserDTO) {
-    const { firstName, lastName, email, usernName } = data;
-    const apyKey = uuid4();
+    try {
+      const { firstName, lastName, email, usernName } = data;
+      const apyKey = uuid4();
 
-    const salt = await bcrypt.genSalt(10);
-    const password = await bcrypt.hash(data.password, salt);
-    let user;
-    await this.prisma.$transaction(async (tx) => {
-      user = await tx.user.create({
-        data: {
-          firstName,
-          lastName,
-          email,
-          username: usernName,
-          password,
-          apiKey: apyKey,
-          activationToken: uuid4(),
-        },
+      const salt = await bcrypt.genSalt(10);
+      const password = await bcrypt.hash(data.password, salt);
+      let user;
+      await this.prisma.$transaction(async (tx) => {
+        user = await tx.user.create({
+          data: {
+            firstName,
+            lastName,
+            email,
+            username: usernName,
+            password,
+            apiKey: apyKey,
+            activationToken: uuid4(),
+          },
+        });
+        await this.mailService.sendVerificationUsers(user);
       });
-      await this.mailService.sendVerificationUsers(user);
-    });
 
-    return {
-      message: 'User created successfully',
-    };
+      return {
+        message: 'User created successfully',
+      };
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new UnauthorizedException('Email already exists');
+      }
+      throw new UnauthorizedException('Could not create user');
+    }
   }
 
   async updateSecretKey(id: number, secret: string) {
