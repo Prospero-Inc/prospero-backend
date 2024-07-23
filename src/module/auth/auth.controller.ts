@@ -7,6 +7,8 @@ import {
   Request,
   Query,
   Patch,
+  Render,
+  Param,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -24,6 +26,8 @@ import {
 } from '@nestjs/swagger';
 import { ActivateUserDto } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { validate } from 'class-validator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -119,14 +123,35 @@ export class AuthController {
     description: 'Contraseña restablecida con éxito.',
   })
   @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
-  async resetPassword(@Body() requestResetPassword: RequestResetPasswordDto) {
+  async requestResetPassword(
+    @Body() requestResetPassword: RequestResetPasswordDto,
+  ) {
     return await this.authService.requestResetPassword(requestResetPassword);
   }
 
   @Get('reset-password/:token')
-  resetPasswordView(@Query('token') token: string) {
-    return {
-      token,
-    };
+  @Render('index')
+  resetPasswordView(@Param('token') token: string) {
+    return { message: 'Hello world!', token: token };
+  }
+
+  @Post('/reset-password/:token')
+  @Render('index')
+  async resetPassword(
+    @Param('token') token: string,
+    @Body('password')
+    password: string,
+  ) {
+    const dto = new ResetPasswordDto();
+    dto.password = password;
+    dto.resetPasswordToken = token;
+    const errors = await validate(dto);
+    if (errors.length) {
+      const errorMessages = errors.map((error) =>
+        Object.values(error.constraints),
+      );
+      return { errorMessages, token };
+    }
+    return await this.authService.resetPassword(dto);
   }
 }

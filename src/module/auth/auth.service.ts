@@ -147,7 +147,7 @@ export class AuthService {
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
     try {
-      const { password, resetPasswordToken } = resetPasswordDto;
+      const { resetPasswordToken, password } = resetPasswordDto;
       const user: User =
         await this.userService.findOneByResetPasswordToken(resetPasswordToken);
       const newPassword = await bcrypt.hash(password, 10);
