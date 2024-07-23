@@ -6,10 +6,12 @@ import { authConstants } from './auth.constants';
 import { ApiKeyStrategy } from './api-key-strategy';
 import { JwtStrategy } from './jwt-strategy';
 import { UserModule } from '../user/user.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     UserModule,
+    MailModule,
     JwtModule.register({
       secret: authConstants.secret,
       signOptions: {

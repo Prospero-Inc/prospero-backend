@@ -6,6 +6,7 @@ import {
   UseGuards,
   Request,
   Query,
+  Patch,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -22,6 +23,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ActivateUserDto } from './dto';
+import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -108,5 +110,23 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
   async activateAccount(@Query() activateUserDto: ActivateUserDto) {
     return await this.authService.activateUser(activateUserDto);
+  }
+
+  @Patch('/request-reset-password')
+  @ApiOperation({ summary: 'Restablecer la contraseña de un usuario' })
+  @ApiResponse({
+    status: 200,
+    description: 'Contraseña restablecida con éxito.',
+  })
+  @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
+  async resetPassword(@Body() requestResetPassword: RequestResetPasswordDto) {
+    return await this.authService.requestResetPassword(requestResetPassword);
+  }
+
+  @Get('reset-password/:token')
+  resetPasswordView(@Query('token') token: string) {
+    return {
+      token,
+    };
   }
 }

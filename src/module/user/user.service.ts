@@ -40,8 +40,9 @@ export class UserService {
         message: 'User created successfully',
       };
     } catch (error) {
+      console.log('error: ', error);
       if (error.code === 'P2002') {
-        throw new UnauthorizedException('Email already exists');
+        throw new UnauthorizedException('Email or Username already exists');
       }
       throw new UnauthorizedException('Could not create user');
     }
@@ -141,6 +142,42 @@ export class UserService {
       data: {
         isActive: true,
         activationToken: null,
+      },
+    });
+  }
+
+  async updateResetPasswordToken(id: number, resetPasswordToken: string) {
+    return await this.prisma.user.update({
+      where: {
+        id,
+      },
+      data: {
+        resetPasswordToken,
+      },
+    });
+  }
+
+  async findOneByResetPasswordToken(resetPasswordToken: string): Promise<User> {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetPasswordToken,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Could not find user');
+    }
+    return user;
+  }
+
+  async updatePassword(id: number, password: string) {
+    return await this.prisma.user.update({
+      where: {
+        id,
+      },
+      data: {
+        password,
+        resetPasswordToken: null,
       },
     });
   }

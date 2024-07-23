@@ -24,4 +24,18 @@ export class MailService {
       },
     });
   }
+
+  async sendResetPassword(user: User, token) {
+    const configService = new ConfigService();
+    const resetPasswordLink = `${configService.get('API_BASE_URL')}auth/reset-password?token=${token}`;
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Reset your password',
+      template: './reset-password',
+      context: {
+        userName: user.username,
+        resetPasswordLink,
+      },
+    });
+  }
 }
