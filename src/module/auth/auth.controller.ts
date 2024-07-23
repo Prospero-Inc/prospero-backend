@@ -139,19 +139,24 @@ export class AuthController {
   @Render('index')
   async resetPassword(
     @Param('token') token: string,
-    @Body('password')
-    password: string,
+    @Body()
+    data: { password: string; confirmPassword: string },
   ) {
-    const dto = new ResetPasswordDto();
-    dto.password = password;
-    dto.resetPasswordToken = token;
-    const errors = await validate(dto);
-    if (errors.length) {
-      const errorMessages = errors.map((error) =>
-        Object.values(error.constraints),
-      );
-      return { errorMessages, token };
+    console.log({ data });
+    if (data.password !== data.confirmPassword) {
+      return { errorMessages: ['Las contraseñas no coinciden qlo'], token };
     }
-    return await this.authService.resetPassword(dto);
+    return;
+    // const dto = new ResetPasswordDto();
+    // dto.password = password;
+    // dto.resetPasswordToken = token;
+    // const errors = await validate(dto);
+    // if (errors.length) {
+    //   const errorMessages = errors.map((error) =>
+    //     Object.values(error.constraints),
+    //   );
+    //   return { errorMessages, token };
+    // }
+    // return await this.authService.resetPassword(dto);
   }
 }

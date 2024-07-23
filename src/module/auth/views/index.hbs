@@ -16,23 +16,33 @@
   </head>
 
   <body>
-    <main class='container h-auto p-3 mt-5 bg-dark rounded-3 shadow'>
+    <main style="min-height: 100vh;"  class='d-flex justify-content-center align-items-center'>
       {{#unless response}}
-        <article class='mx-3'>
+        <article class='mx-3 my-5 w-75'>
           <form method='post' action='/api/auth/reset-password/{{token}}'>
             <div class='mb-3'>
-              <label for='password' class='form-label text-light'>password
+              <label for='password' class='form-label text-dark'>new  password
               </label>
               <input
                 name='password'
                 type='password'
-                class='form-control'
+                class='form-control form-control-lg'
                 id='password'
                 placeholder='****'
               />
             </div>
-
-            <button type='submit' class='btn btn-primary'>Confirm</button>
+            <div class='mb-3'>
+              <label for='confirmPassword' class='form-label text-dark'>Confirm Password
+              </label>
+              <input
+                name='confirmPassword'
+                type='password'
+                class='form-control form-control-lg'
+                id='confirmPassword'
+                placeholder='****'
+              />
+            </div>
+            <button type='submit' class='btn btn-primary'>Submit</button>
           </form>
           {{#if errorMessages}}
             <div class='alert alert-danger' role='alert'>
@@ -44,6 +54,14 @@
             </div>
 
           {{/if}}
+            {{!-- strong password --}}
+            <ul class="list-group">
+              <li class="list-group-item mb-2">At least 8 characters</li>
+              <li class="list-group-item mb-2">At least 1 uppercase letter</li>
+              <li class="list-group-item mb-2">At least 1 lowercase letter</li>
+              <li class="list-group-item mb-2">At least 1 number</li>
+              <li class="list-group-item mb-2">At least 1 special character</li>
+          
 
         </article>
 
