@@ -46,11 +46,8 @@ COPY --from=builder /usr/src/app/prisma ./prisma
 
 RUN npm ci --production
 
-# RUN migrate database schema
-RUN doppler run -- npx prisma migrate deploy
-
 # Exponer el puerto de la aplicación
 EXPOSE 3000
 
 # Comando para iniciar la aplicación
-CMD ["doppler", "run", "--", "npm", "run", "start:prod"]
+CMD ["sh", "-c", "doppler run -- npx prisma migrate deploy && doppler run -- npm run start:prod"]
