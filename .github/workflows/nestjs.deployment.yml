@@ -23,13 +23,6 @@ jobs:
           docker stop prospero-backend || true
           docker rm prospero-backend || true
 
-      - name: Run Prisma migrations
-        run: |
-          docker run --rm \
-          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
-          prospero-backend:latest \
-          doppler run -- npx prisma migrate deploy
-
       - name: Deploy Docker container
         run: |
           docker run -d -p 3000:3000 --name prospero-backend \

@@ -46,6 +46,9 @@ COPY --from=builder /usr/src/app/prisma ./prisma
 
 RUN npm ci --production
 
+# RUN migrate database schema
+RUN doppler run -- npx prisma migrate deploy
+
 # Exponer el puerto de la aplicación
 EXPOSE 3000
 
