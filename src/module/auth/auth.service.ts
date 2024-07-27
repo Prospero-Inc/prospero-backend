@@ -12,12 +12,17 @@ import { Enable2FAType } from './types';
 import { ActivateUserDto } from './dto';
 import { User } from '@prisma/client';
 import { AccessTokenResponse } from './interfaces';
+import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
+import { MailService } from '../mail/mail.service';
+import { v4 as uuid4 } from 'uuid';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   async login(
@@ -123,5 +128,38 @@ export class AuthService {
       throw new UnprocessableEntityException('This action can not be done');
     }
     await this.userService.activateUser(id);
+  }
+
+  async requestResetPassword(requestResetPassword: RequestResetPasswordDto) {
+    const { email } = requestResetPassword;
+    try {
+      const user: User = await this.userService.findOne(email);
+      const resetPasswordToken = uuid4();
+      await this.userService.updateResetPasswordToken(
+        user.id,
+        resetPasswordToken,
+      );
+      await this.mailService.sendResetPassword(user, resetPasswordToken);
+    } catch (error) {
+      throw new UnprocessableEntityException('This action can not be done');
+    }
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    try {
+      const { resetPasswordToken, password } = resetPasswordDto;
+      const user: User =
+        await this.userService.findOneByResetPasswordToken(resetPasswordToken);
+      const newPassword = await bcrypt.hash(password, 10);
+
+      await this.userService.updatePassword(user.id, newPassword);
+
+      return {
+        message:
+          'Your password has been successfully updated. Please use your new password the next time you log in.',
+      };
+    } catch (error) {
+      throw new UnprocessableEntityException('This action can not be done');
+    }
   }
 }
