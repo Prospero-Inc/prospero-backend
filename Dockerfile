@@ -50,4 +50,4 @@ RUN npm ci --production
 EXPOSE 3000
 
 # Comando para iniciar la aplicación
-CMD ["sh", "-c", "doppler run -- npx prisma migrate deploy && doppler run -- npm run start:prod"]
+CMD ["doppler", "run", "--", "npm", "run", "start:prod"]
