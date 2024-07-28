@@ -1,12 +1,12 @@
-import { Body, Controller, Post, Query, Get, Param } from '@nestjs/common';
+import { Body, Controller, Post, Query, Get, UseGuards } from '@nestjs/common';
 import { SalaryService } from '../services/salary.service';
 import { CreateAmountDto } from '../domain/dto/create-amount.dto';
 import { FiftyThirtyTwentyStrategy } from '../strategies/fifty-thirty-twenty.strategy';
 import { CreateSalaryDto } from '../domain/dto/create-salary.dto copy';
+import { JwtAuthGuard } from '../../auth/jwt-guard';
 import {
   ApiBody,
   ApiOperation,
-  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -18,6 +18,7 @@ export class SalaryController {
   constructor(private readonly salaryService: SalaryService) {}
 
   @Post('distribute/fifty-thirty-twenty')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Distribuir salario según la estrategia 50-30-20' })
   @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
   @ApiBody({
@@ -64,6 +65,7 @@ export class SalaryController {
   }
 
   @Get('distribute/preview')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Previsualización de la distribución del salario',
   })
