@@ -5,6 +5,7 @@ import { FiftyThirtyTwentyStrategy } from '../strategies/fifty-thirty-twenty.str
 import { CreateSalaryDto } from '../domain/dto/create-salary.dto copy';
 import { JwtAuthGuard } from '../../auth/jwt-guard';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiOperation,
   ApiQuery,
@@ -18,6 +19,7 @@ export class SalaryController {
   constructor(private readonly salaryService: SalaryService) {}
 
   @Post('distribute/fifty-thirty-twenty')
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Distribuir salario según la estrategia 50-30-20' })
   @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
@@ -65,6 +67,7 @@ export class SalaryController {
   }
 
   @Get('distribute/preview')
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Previsualización de la distribución del salario',

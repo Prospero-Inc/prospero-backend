@@ -31,7 +31,17 @@ async function bootstrap() {
     .addServer('http://31.220.97.169:3000/api/', 'Staging')
     .addServer('https://#/', 'Production')
     .addTag('Endpoint')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
     .setContact(
       'Soporte',
       'http://mi-prospero.com/soporte',
