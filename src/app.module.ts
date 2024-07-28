@@ -5,6 +5,7 @@ import { UserModule } from './module/user/user.module';
 import { SalaryModule } from './module/salary/salary.module';
 import { MailModule } from './module/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
+import { GoogleStrategy } from './module/auth/google.strategy';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { ConfigModule } from '@nestjs/config';
     MailModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [GoogleStrategy],
 })
 export class AppModule {}

@@ -4,11 +4,13 @@ import {
   Post,
   Body,
   UseGuards,
-  Request,
   Query,
   Patch,
   Render,
   Param,
+  SetMetadata,
+  Req,
+  Request,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -24,10 +26,12 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { ActivateUserDto } from './dto';
+import { ActivateUserDto, GoogleLoginUserDto } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { validate } from 'class-validator';
+import { HttpGoogleOAuthGuard } from 'src/guards/http-google-oauth.guard';
+import { HttpUser } from './decorator/user.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -157,5 +161,25 @@ export class AuthController {
       return { errorMessages, token };
     }
     return await this.authService.resetPassword(dto);
+  }
+
+  @SetMetadata('google-login', true)
+  @UseGuards(HttpGoogleOAuthGuard)
+  @Get('google')
+  @UseGuards(HttpGoogleOAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async googleAuth(@Req() _req: Request) {}
+
+  @SetMetadata('google-login', true)
+  @UseGuards(HttpGoogleOAuthGuard)
+  @Get('google-redirect')
+  googleAuthRedirect(@HttpUser() user: GoogleLoginUserDto) {
+    return this.authService.googleLogin(user);
+  }
+
+  @Get('test')
+  @UseGuards(JwtAuthGuard)
+  test() {
+    return 'test';
   }
 }

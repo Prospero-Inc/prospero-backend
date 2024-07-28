@@ -6,6 +6,7 @@ import { ApiKeyStrategy } from './api-key-strategy';
 import { JwtStrategy } from './jwt-strategy';
 import { UserModule } from '../user/user.module';
 import { MailModule } from '../mail/mail.module';
+import { GoogleStrategy } from './google.strategy';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { MailModule } from '../mail/mail.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, ApiKeyStrategy],
+  providers: [AuthService, JwtStrategy, ApiKeyStrategy, GoogleStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}

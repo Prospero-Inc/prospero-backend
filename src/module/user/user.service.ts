@@ -5,6 +5,7 @@ import { CreateUserDTO } from './dto/create-user.dto';
 import { v4 as uuid4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
+import { GoogleLoginUserDto } from '../auth/dto';
 
 @Injectable()
 export class UserService {
@@ -48,6 +49,62 @@ export class UserService {
     }
   }
 
+  async createUserGoogle(user: GoogleLoginUserDto): Promise<User> {
+    try {
+      const {
+        firstName,
+        lastName,
+        email,
+        email_verified,
+        expires_in,
+        picture,
+        providerAccountId,
+        accessToken,
+        refreshToken,
+        id_token,
+      } = user;
+      const userHast = uuid4();
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.create({
+          data: {
+            firstName,
+            lastName,
+            username: `${firstName}${userHast}`,
+            email: email,
+            emailVerified: email_verified ? new Date().toISOString() : null,
+            image: picture,
+            isGoogleAccount: true,
+            isActive: true,
+            accounts: {
+              create: {
+                type: 'oauth',
+                provider: 'google',
+                providerAccountId: providerAccountId,
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                id_token: id_token,
+                expires_at: expires_in,
+              },
+            },
+          },
+        });
+      });
+
+      return await this.prisma.user.findUnique({
+        where: {
+          email,
+        },
+      });
+    } catch (error) {
+      console.log('error: ', error);
+      if (error.code === 'P2002') {
+        throw new UnauthorizedException('Email or Username already exists');
+      }
+      throw new UnauthorizedException('Could not create user');
+    }
+  }
+
   async updateSecretKey(id: number, secret: string) {
     return await this.prisma.user.update({
       where: {
@@ -66,10 +123,6 @@ export class UserService {
         email,
       },
     });
-
-    if (!user) {
-      throw new UnauthorizedException('Could not find user');
-    }
     return user;
   }
 

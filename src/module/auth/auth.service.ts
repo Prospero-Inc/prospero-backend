@@ -9,7 +9,7 @@ import { LoginDTO } from '../user/dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
-import { ActivateUserDto } from './dto';
+import { ActivateUserDto, GoogleLoginUserDto } from './dto';
 import { User } from '@prisma/client';
 import { AccessTokenResponse } from './interfaces';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
@@ -160,6 +160,36 @@ export class AuthService {
       };
     } catch (error) {
       throw new UnprocessableEntityException('This action can not be done');
+    }
+  }
+
+  async googleLogin(user: GoogleLoginUserDto) {
+    try {
+      if (!user.email_verified) {
+        throw new UnauthorizedException('No user from google');
+      }
+
+      let userExists = await this.userService.findOne(user.email);
+      if (!userExists) {
+        userExists = await this.userService.createUserGoogle(user);
+      }
+      const access_token = this.jwtService.sign({
+        id: userExists.id,
+        email: userExists.email,
+        id_token: user.id_token,
+        accessToken: user.accessToken,
+        expires_in: user.expires_in,
+        sub: userExists.id,
+      });
+
+      return {
+        access_token,
+      };
+    } catch (error) {
+      console.log('error: ', error);
+      throw new UnauthorizedException(
+        'No user from google or could not create user',
+      );
     }
   }
 }
