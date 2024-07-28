@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Query, Get } from '@nestjs/common';
+import { Body, Controller, Post, Query, Get, Param } from '@nestjs/common';
 import { SalaryService } from '../services/salary.service';
 import { CreateAmountDto } from '../domain/dto/create-amount.dto';
 import { FiftyThirtyTwentyStrategy } from '../strategies/fifty-thirty-twenty.strategy';
@@ -6,6 +6,7 @@ import { CreateSalaryDto } from '../domain/dto/create-salary.dto copy';
 import {
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -66,9 +67,10 @@ export class SalaryController {
   @ApiOperation({
     summary: 'Previsualización de la distribución del salario',
   })
-  @ApiBody({
-    type: CreateAmountDto,
-    description: 'Detalles del monto a distribuir',
+  @ApiQuery({
+    name: 'amount',
+    type: Number,
+    description: 'Monto a distribuir',
   })
   @ApiResponse({
     status: 200,
@@ -78,7 +80,7 @@ export class SalaryController {
     status: 500,
     description: 'Error al distribuir el salario',
   })
-  async distributeSalaryPreview(@Body() createAmountDto: CreateAmountDto) {
+  async distributeSalaryPreview(@Query() createAmountDto: CreateAmountDto) {
     this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
     return this.salaryService.distributeSalaryPrevious(createAmountDto);
   }
