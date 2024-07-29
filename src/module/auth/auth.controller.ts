@@ -7,8 +7,8 @@ import {
   Request,
   Query,
   Patch,
-  Render,
   Param,
+  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -28,6 +28,7 @@ import { ActivateUserDto } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { validate } from 'class-validator';
+import { Response } from 'express';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -129,14 +130,7 @@ export class AuthController {
     return await this.authService.requestResetPassword(requestResetPassword);
   }
 
-  @Get('reset-password/:token')
-  @Render('index')
-  resetPasswordView(@Param('token') token: string) {
-    return { message: 'Hello world!', token: token };
-  }
-
   @Post('/reset-password/:token')
-  @Render('index')
   async resetPassword(
     @Param('token') token: string,
     @Body()
