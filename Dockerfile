@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get purge -y --auto-remove python3 build-essential \
     && rm -rf /var/lib/apt/lists/*
 
- # Copiar el resto de los archivos del proyecto
+# Copiar el resto de los archivos del proyecto
 COPY . .
 
 # Ejecutar Prisma generate
@@ -42,6 +42,7 @@ WORKDIR /usr/src/app
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/public ./public
 
 RUN npm ci --production
 
