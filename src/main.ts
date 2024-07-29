@@ -18,8 +18,18 @@ async function bootstrap() {
     }),
   );
 
-  // statics
+  // Configurar archivos estáticos
   app.useStaticAssets(join(__dirname, '..', 'public'));
+
+  // Middleware para servir el index.html
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      res.sendFile(join(__dirname, '..', 'public', 'index.html'));
+    } else {
+      next();
+    }
+  });
+  // statics
   app.setBaseViewsDir(join(__dirname, 'module/auth/', 'views'));
   app.setViewEngine('hbs');
 
