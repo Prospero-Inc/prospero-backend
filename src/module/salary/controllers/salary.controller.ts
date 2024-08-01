@@ -7,11 +7,14 @@ import { JwtAuthGuard } from '../../auth/jwt-guard';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiInternalServerErrorResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { SalaryDetailsDto } from '../dto/salary-details.dto';
 
 @ApiTags('salary')
 @Controller('salary')
@@ -91,6 +94,19 @@ export class SalaryController {
   }
 
   @Get('details')
+  @ApiOperation({ summary: 'Obtener detalles del salario del usuario' })
+  @ApiQuery({
+    name: 'userId',
+    type: Number,
+    description: 'ID del usuario para obtener detalles del salario',
+  })
+  @ApiOkResponse({
+    description: 'Detalles del salario obtenidos exitosamente',
+    type: SalaryDetailsDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error al obtener los detalles del salario',
+  })
   async getUserSalaryDetails(@Query('userId') userId: number) {
     return this.salaryService.getUserSalaryDetails(+userId);
   }
