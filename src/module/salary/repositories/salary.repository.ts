@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/module/prisma.service';
 import { CreateAmountDto } from '../domain/dto/create-amount.dto';
 import { SalaryDistributionStrategy } from '../strategies/salary-distribution.strategy';
+import { CURRENT_MONTH, CURRENT_YEAR } from 'src/constants/date-fns';
+import { Mes } from '@prisma/client';
 
 @Injectable()
 export class SalaryRepository {
@@ -38,5 +40,38 @@ export class SalaryRepository {
         amount,
       },
     });
+  }
+
+  async getUserSalaryDetails(userId: number) {
+    console.log(CURRENT_YEAR);
+    console.log(CURRENT_MONTH);
+
+    const salaryData = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        username: true,
+        salary: {
+          where: {
+            month: CURRENT_MONTH as Mes,
+            year: CURRENT_YEAR,
+          },
+          select: {
+            amount: true,
+            month: true,
+            year: true,
+            distribution: {
+              select: {
+                fixedExpenses: true,
+                variableExpenses: true,
+                savings: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    return salaryData;
   }
 }

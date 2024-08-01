@@ -89,4 +89,9 @@ export class SalaryController {
     this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
     return this.salaryService.distributeSalaryPrevious(createAmountDto);
   }
+
+  @Get('details')
+  async getUserSalaryDetails(@Query('userId') userId: number) {
+    return this.salaryService.getUserSalaryDetails(+userId);
+  }
 }

@@ -1,10 +1,17 @@
 import {
   IsDate,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
 } from 'class-validator';
+
+export enum TransactionType {
+  FixedExpense = 'FixedExpense',
+  VariableExpense = 'VariableExpense',
+  Savings = 'Savings',
+}
 
 export class CreateTransactionDto {
   @IsNumber()
@@ -20,4 +27,7 @@ export class CreateTransactionDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsEnum(TransactionType)
+  type: TransactionType;
 }

@@ -53,4 +53,14 @@ export class SalaryService {
       throw new InternalServerErrorException('Error al distribuir el salario');
     }
   }
+
+  async getUserSalaryDetails(userId: number) {
+    try {
+      return await this.salaryRepository.getUserSalaryDetails(userId);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Error al obtener los detalles del salario',
+      );
+    }
+  }
 }
