@@ -43,9 +43,6 @@ export class SalaryRepository {
   }
 
   async getUserSalaryDetails(userId: number) {
-    console.log(CURRENT_YEAR);
-    console.log(CURRENT_MONTH);
-
     const salaryData = await this.prisma.user.findUnique({
       where: {
         id: userId,
