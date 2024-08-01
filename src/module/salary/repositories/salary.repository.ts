@@ -60,6 +60,7 @@ export class SalaryRepository {
             year: true,
             distribution: {
               select: {
+                id: true,
                 fixedExpenses: true,
                 variableExpenses: true,
                 savings: true,
