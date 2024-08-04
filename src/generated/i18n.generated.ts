@@ -34,6 +34,10 @@ export interface I18nTranslations {
     cursorInvalidNumber: string;
     apiUnauthorizedResponse: string;
     tooManyRequest: string;
+    twoFaRequired: string;
+    passwordDoesNotMatch: string;
+    errorVerifyingToken: string;
+    passwordUpdatedSuccess: string;
   };
   validation: {
     isNotEmpty: string;

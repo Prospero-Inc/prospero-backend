@@ -38,7 +38,9 @@ export class AuthService {
     );
 
     if (!passwordMatched) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(
+        translate('exception.invalidCredentials'),
+      );
     }
 
     if (!user.isActive) {
@@ -51,8 +53,7 @@ export class AuthService {
       if (user.enable2FA && user.twoFASecret) {
         return {
           validate2FA: 'http://localhost:3000/auth/validate-2fa',
-          message:
-            'Please sends the one time password/token from your Google Authenticator App',
+          message: `${translate('exception.otpRequired')}`,
         };
       }
 
@@ -67,7 +68,9 @@ export class AuthService {
       };
     }
 
-    throw new UnauthorizedException('Password does not match');
+    throw new UnauthorizedException(
+      translate('exception.passwordDoesNotMatch'),
+    );
   }
 
   async enable2FA(userId: number): Promise<Enable2FAType> {
@@ -77,7 +80,6 @@ export class AuthService {
     }
 
     const secret = speakeasy.generateSecret();
-    console.log('awwwww', secret);
     user.twoFASecret = secret.base32;
     await this.userService.updateSecretKey(user.id, user.twoFASecret);
     return { secret: user.twoFASecret };
@@ -104,13 +106,13 @@ export class AuthService {
         window: 1,
       });
 
-      console.log('verified', verified);
-
       return {
         verified: verified,
       };
     } catch (error) {
-      throw new UnauthorizedException('Error verifying token');
+      throw new UnauthorizedException(
+        translate('exception.errorVerifyingToken'),
+      );
     }
   }
 
@@ -157,8 +159,7 @@ export class AuthService {
       await this.userService.updatePassword(user.id, newPassword);
 
       return {
-        message:
-          'Your password has been successfully updated. Please use your new password the next time you log in.',
+        message: `${translate('exception.passwordUpdatedSuccess')}`,
       };
     } catch (error) {
       throw new UnprocessableEntityException('This action can not be done');
