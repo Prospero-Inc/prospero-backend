@@ -33,18 +33,25 @@ model User {
 }
 
 model Transaction {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @unique @map("user_id")
-  user        User     @relation(fields: [userId], references: [id])
+  id          Int             @id @default(autoincrement())
+  userId      Int             @unique @map("user_id")
+  user        User            @relation(fields: [userId], references: [id])
   amount      Float
   date        DateTime
   category    String
   description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  type        TransactionType
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
   @@map("transactions")
+}
+
+enum TransactionType {
+  FixedExpense
+  VariableExpense
+  Savings
 }
 
 model FixedExpense {

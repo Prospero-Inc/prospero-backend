@@ -6,10 +6,12 @@ import { ApiKeyStrategy } from './api-key-strategy';
 import { JwtStrategy } from './jwt-strategy';
 import { UserModule } from '../user/user.module';
 import { MailModule } from '../mail/mail.module';
+import { NestI18nModule } from 'src/lib';
 
 @Module({
   imports: [
     UserModule,
+    NestI18nModule,
     MailModule,
     JwtModule.register({
       secret: process.env.SECRET,
