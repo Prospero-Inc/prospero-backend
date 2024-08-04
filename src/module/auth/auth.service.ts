@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
   UnprocessableEntityException,
@@ -16,6 +17,7 @@ import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { MailService } from '../mail/mail.service';
 import { v4 as uuid4 } from 'uuid';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { translate } from 'src/lib/i18n';
 
 @Injectable()
 export class AuthService {
@@ -40,7 +42,7 @@ export class AuthService {
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('User is not active');
+      throw new ForbiddenException(translate('exception.inactiveUser'));
     }
 
     const payload = { email: user.email, userId: user.id };

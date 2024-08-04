@@ -8,7 +8,6 @@ import {
   Query,
   Patch,
   Param,
-  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -28,7 +27,6 @@ import { ActivateUserDto } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { validate } from 'class-validator';
-import { Response } from 'express';
 
 @ApiTags('auth')
 @Controller('auth')
