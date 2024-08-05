@@ -3,45 +3,55 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id              Int            @id @default(autoincrement())
-  username        String         @unique
-  isActive        Boolean        @default(false) @map("is_active")
-  isGoogleAccount Boolean        @default(false) @map("is_google_account")
-  activationToken String?        @unique @map("activation_token")
-  transactions    Transaction[]
-  fixedExpenses   FixedExpense[]
-  salary          Salary?
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
-  apiKey          String?        @unique @map("api_key")
-  enable2FA       Boolean        @default(false) @map("enable_2fa")
-  twoFASecret     String?        @map("2fa_secret")
-  password        String?
-  email           String         @unique
-  lastName        String?        @map("last_name")
-  firstName       String?        @map("first_name")
+  id                 Int            @id @default(autoincrement())
+  username           String         @unique
+  isActive           Boolean        @default(false) @map("is_active")
+  isGoogleAccount    Boolean        @default(false) @map("is_google_account")
+  activationToken    String?        @unique @map("activation_token")
+  transactions       Transaction[]
+  fixedExpenses      FixedExpense[]
+  salary             Salary?
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  apiKey             String?        @unique @map("api_key")
+  enable2FA          Boolean        @default(false) @map("enable_2fa")
+  twoFASecret        String?        @map("2fa_secret")
+  password           String?
+  email              String         @unique
+  lastName           String?        @map("last_name")
+  firstName          String?        @map("first_name")
+  resetPasswordToken String?        @map("reset_password_token")
 
   @@index([username, email], name: "user_search_idx")
   @@map("users")
 }
 
 model Transaction {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @unique @map("user_id")
-  user        User     @relation(fields: [userId], references: [id])
+  id          Int             @id @default(autoincrement())
+  userId      Int             @unique @map("user_id")
+  user        User            @relation(fields: [userId], references: [id])
   amount      Float
   date        DateTime
   category    String
   description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  type        TransactionType
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
 
+  @@index([date, category], name: "transaction_date_category_idx")
   @@map("transactions")
+}
+
+enum TransactionType {
+  FixedExpense
+  VariableExpense
+  Savings
 }
 
 model FixedExpense {
@@ -56,7 +66,23 @@ model FixedExpense {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([dueDate, category], name: "fixed_expense_due_date_category_idx")
   @@map("fixed_expenses")
+}
+
+enum Mes {
+  Enero
+  Febrero
+  Marzo
+  Abril
+  Mayo
+  Junio
+  Julio
+  Agosto
+  Septiembre
+  Octubre
+  Noviembre
+  Diciembre
 }
 
 model Salary {
@@ -64,10 +90,13 @@ model Salary {
   userId       Int           @unique @map("user_id")
   user         User          @relation(fields: [userId], references: [id])
   amount       Float
+  month        Mes
+  year         Int
   distribution Distribution?
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
+  @@index([month, year], name: "salary_month_year_idx")
   @@map("salaries")
 }
 
@@ -81,5 +110,6 @@ model Distribution {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
+  @@index([fixedExpenses, variableExpenses, savings], name: "distribution_idx")
   @@map("distributions")
 }

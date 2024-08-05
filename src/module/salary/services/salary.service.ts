@@ -38,4 +38,29 @@ export class SalaryService {
       throw new InternalServerErrorException('Error al crear el salario');
     }
   }
+
+  async distributeSalaryPrevious({ amount }: CreateAmountDto) {
+    try {
+      if (!this.strategy) {
+        throw new Error('Strategy not set');
+      }
+      const distribution = this.strategy.distributeSalary(amount);
+      return {
+        message: 'Aquí está la previsualización de la distribución del salario',
+        distribution,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Error al distribuir el salario');
+    }
+  }
+
+  async getUserSalaryDetails(userId: number) {
+    try {
+      return await this.salaryRepository.getUserSalaryDetails(userId);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Error al obtener los detalles del salario',
+      );
+    }
+  }
 }

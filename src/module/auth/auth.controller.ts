@@ -6,6 +6,8 @@ import {
   UseGuards,
   Request,
   Query,
+  Patch,
+  Param,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -22,6 +24,9 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ActivateUserDto } from './dto';
+import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { validate } from 'class-validator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -108,5 +113,41 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
   async activateAccount(@Query() activateUserDto: ActivateUserDto) {
     return await this.authService.activateUser(activateUserDto);
+  }
+
+  @Patch('/request-reset-password')
+  @ApiOperation({ summary: 'Restablecer la contraseña de un usuario' })
+  @ApiResponse({
+    status: 200,
+    description: 'Contraseña restablecida con éxito.',
+  })
+  @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
+  async requestResetPassword(
+    @Body() requestResetPassword: RequestResetPasswordDto,
+  ) {
+    return await this.authService.requestResetPassword(requestResetPassword);
+  }
+
+  @Post('/reset-password/:token')
+  async resetPassword(
+    @Param('token') token: string,
+    @Body()
+    data: { password: string; confirmPassword: string },
+  ) {
+    console.log({ data });
+    if (data.password !== data.confirmPassword) {
+      return { errorMessages: ['Las contraseñas no coinciden'], token };
+    }
+    const dto = new ResetPasswordDto();
+    dto.password = data.password;
+    dto.resetPasswordToken = token;
+    const errors = await validate(dto);
+    if (errors.length) {
+      const errorMessages = errors.map((error) =>
+        Object.values(error.constraints),
+      );
+      return { errorMessages, token };
+    }
+    return await this.authService.resetPassword(dto);
   }
 }

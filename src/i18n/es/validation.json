@@ -1,0 +1,7 @@
+{
+    "NOT_EMPTY": "{property} no puede estar vacío",
+    "INVALID_EMAIL": "El correo electrónico no es válido",
+    "INVALID_BOOLEAN": "{property} no es un booleano",
+    "MIN": "{property} con valor: \"{value}\" debe ser al menos {constraints.0}, de lo contrario, {message}",
+    "MAX": "{property} con valor: \"{value}\" debe ser menor que {constraints.0}, de lo contrario, {message}"
+  }

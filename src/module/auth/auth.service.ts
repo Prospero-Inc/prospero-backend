@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
   UnprocessableEntityException,
@@ -11,19 +12,24 @@ import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
 import { ActivateUserDto } from './dto';
 import { User } from '@prisma/client';
+import { AccessTokenResponse } from './interfaces';
+import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
+import { MailService } from '../mail/mail.service';
+import { v4 as uuid4 } from 'uuid';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { translate } from 'src/lib/i18n';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   async login(
     loginDTO: LoginDTO,
-  ): Promise<
-    { accessToken: string } | { validate2FA: string; message: string }
-  > {
+  ): Promise<AccessTokenResponse | { validate2FA: string; message: string }> {
     const user = await this.userService.findOne(loginDTO.email);
 
     const passwordMatched = await bcrypt.compare(
@@ -32,14 +38,13 @@ export class AuthService {
     );
 
     if (!passwordMatched) {
-      return {
-        message: 'Invalid credentials',
-        accessToken: null,
-      };
+      throw new UnauthorizedException(
+        translate('exception.invalidCredentials'),
+      );
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('User is not active');
+      throw new ForbiddenException(translate('exception.inactiveUser'));
     }
 
     const payload = { email: user.email, userId: user.id };
@@ -48,17 +53,24 @@ export class AuthService {
       if (user.enable2FA && user.twoFASecret) {
         return {
           validate2FA: 'http://localhost:3000/auth/validate-2fa',
-          message:
-            'Please sends the one time password/token from your Google Authenticator App',
+          message: `${translate('exception.otpRequired')}`,
         };
       }
 
       return {
         accessToken: this.jwtService.sign(payload),
+        user: {
+          id: user.id,
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          username: user.username,
+        },
       };
     }
 
-    throw new UnauthorizedException('Password does not match');
+    throw new UnauthorizedException(
+      translate('exception.passwordDoesNotMatch'),
+    );
   }
 
   async enable2FA(userId: number): Promise<Enable2FAType> {
@@ -68,7 +80,6 @@ export class AuthService {
     }
 
     const secret = speakeasy.generateSecret();
-    console.log('awwwww', secret);
     user.twoFASecret = secret.base32;
     await this.userService.updateSecretKey(user.id, user.twoFASecret);
     return { secret: user.twoFASecret };
@@ -95,13 +106,13 @@ export class AuthService {
         window: 1,
       });
 
-      console.log('verified', verified);
-
       return {
         verified: verified,
       };
     } catch (error) {
-      throw new UnauthorizedException('Error verifying token');
+      throw new UnauthorizedException(
+        translate('exception.errorVerifyingToken'),
+      );
     }
   }
 
@@ -121,5 +132,37 @@ export class AuthService {
       throw new UnprocessableEntityException('This action can not be done');
     }
     await this.userService.activateUser(id);
+  }
+
+  async requestResetPassword(requestResetPassword: RequestResetPasswordDto) {
+    const { email } = requestResetPassword;
+    try {
+      const user: User = await this.userService.findOne(email);
+      const resetPasswordToken = uuid4();
+      await this.userService.updateResetPasswordToken(
+        user.id,
+        resetPasswordToken,
+      );
+      await this.mailService.sendResetPassword(user, resetPasswordToken);
+    } catch (error) {
+      throw new UnprocessableEntityException('This action can not be done');
+    }
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    try {
+      const { resetPasswordToken, password } = resetPasswordDto;
+      const user: User =
+        await this.userService.findOneByResetPasswordToken(resetPasswordToken);
+      const newPassword = await bcrypt.hash(password, 10);
+
+      await this.userService.updatePassword(user.id, newPassword);
+
+      return {
+        message: `${translate('exception.passwordUpdatedSuccess')}`,
+      };
+    } catch (error) {
+      throw new UnprocessableEntityException('This action can not be done');
+    }
   }
 }

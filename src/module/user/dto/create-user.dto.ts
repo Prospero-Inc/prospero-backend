@@ -6,6 +6,7 @@ import {
   IsString,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateUserDTO {
   @ApiProperty({
@@ -28,8 +29,8 @@ export class CreateUserDTO {
     description: 'Correo electrónico del usuario',
     example: 'john.doe@example.com',
   })
-  @IsEmail()
-  @IsNotEmpty()
+  @IsEmail({}, { message: i18nValidationMessage('validation.INVALID_EMAIL') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
   email: string;
 
   @ApiProperty({
@@ -44,7 +45,7 @@ export class CreateUserDTO {
     example: 'StrongPassword123',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
   password: string;
 
   @IsOptional()

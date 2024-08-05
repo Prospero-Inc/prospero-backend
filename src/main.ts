@@ -1,12 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useGlobalPipes(
-    new ValidationPipe({
+    new I18nValidationPipe({
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
@@ -15,6 +17,28 @@ async function bootstrap() {
       },
     }),
   );
+
+  app.useGlobalFilters(
+    new I18nValidationExceptionFilter({
+      detailedErrors: false,
+    }),
+  );
+
+  // Configurar archivos estáticos
+  app.useStaticAssets(join(__dirname, '..', 'public'));
+
+  // Middleware para servir el index.html
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      res.sendFile(join(__dirname, '..', 'public', 'index.html'));
+    } else {
+      next();
+    }
+  });
+  // statics
+  app.setBaseViewsDir(join(__dirname, 'module/auth/', 'views'));
+  app.setViewEngine('hbs');
+
   const config = new DocumentBuilder()
     .setTitle('Prospero API documentation')
     .setDescription('The Prospero API description')
@@ -23,7 +47,17 @@ async function bootstrap() {
     .addServer('http://31.220.97.169:3000/api/', 'Staging')
     .addServer('https://#/', 'Production')
     .addTag('Endpoint')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
     .setContact(
       'Soporte',
       'http://mi-prospero.com/soporte',
@@ -40,6 +74,7 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     preflightContinue: false,
   });
+
   await app.listen(3000);
 }
 bootstrap();
