@@ -2,37 +2,35 @@ name: Node.js CI
 
 on:
   push:
-    branches: ['developer']
+    branches:
+      - developer
 
 jobs:
   deploy:
     runs-on: self-hosted
 
-    strategy:
-      matrix:
-        node-version: [18.16.0]
+    env:
+      NODE_ENV: production
+      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      API_BASE_URL_RESET: ${{ secrets.API_BASE_URL_RESET }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      DOPPLER_CONFIG: ${{ secrets.DOPPLER_CONFIG }}
+      DOPPLER_ENVIRONMENT: ${{ secrets.DOPPLER_ENVIRONMENT }}
+      DOPPLER_PROJECT: ${{ secrets.DOPPLER_PROJECT }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      MAIL_HOST: ${{ secrets.MAIL_HOST }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      MAIL_PORT: ${{ secrets.MAIL_PORT }}
+      MAIL_SERVICE: ${{ secrets.MAIL_SERVICE }}
+      MAIL_USER: ${{ secrets.MAIL_USER }}
+      SECRET: ${{ secrets.SECRET }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t prospero-backend:latest .
-
       - name: Stop existing container
-        run: |
-          docker stop prospero-backend || true
-          docker rm prospero-backend || true
-
-      - name: Run Prisma migrations
-        run: |
-          docker run --rm \
-          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
-          prospero-backend:latest \
-          doppler run -- npx prisma migrate deploy
+        run: docker compose down --rmi all
 
       - name: Deploy Docker container
-        run: |
-          docker run -d -p 3000:3000 --name prospero-backend \
-          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
-          prospero-backend:latest \
-          doppler run -- npm run start:prod
+        run: docker compose up -d

@@ -28,13 +28,6 @@ RUN npm run build
 # Etapa final
 FROM node:18.16.0-slim
 
-# Install Doppler CLI
-RUN apt-get update && apt-get install -y apt-transport-https ca-certificates curl gnupg && \
-    curl -sLf --retry 3 --tlsv1.2 --proto "=https" 'https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key' | gpg --dearmor -o /usr/share/keyrings/doppler-archive-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/doppler-archive-keyring.gpg] https://packages.doppler.com/public/cli/deb/debian any-version main" | tee /etc/apt/sources.list.d/doppler-cli.list && \
-    apt-get update && \
-    apt-get -y install doppler
-
 # Establecer el directorio de trabajo
 WORKDIR /usr/src/app
 
@@ -44,10 +37,45 @@ COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/public ./public
 
+# Definir argumentos de construcción
+ARG NODE_ENV
+ARG API_BASE_URL
+ARG API_BASE_URL_RESET
+ARG DATABASE_URL
+ARG DIRECT_URL
+ARG DOPPLER_CONFIG
+ARG DOPPLER_ENVIRONMENT
+ARG DOPPLER_PROJECT
+ARG MAIL_FROM
+ARG MAIL_HOST
+ARG MAIL_PASSWORD
+ARG MAIL_PORT
+ARG MAIL_SERVICE
+ARG MAIL_USER
+ARG SECRET
+
+# Establecer variables de entorno
+ENV NODE_ENV=$NODE_ENV
+ENV API_BASE_URL=$API_BASE_URL
+ENV API_BASE_URL_RESET=$API_BASE_URL_RESET
+ENV DATABASE_URL=$DATABASE_URL
+ENV DIRECT_URL=$DIRECT_URL
+ENV DOPPLER_CONFIG=$DOPPLER_CONFIG
+ENV DOPPLER_ENVIRONMENT=$DOPPLER_ENVIRONMENT
+ENV DOPPLER_PROJECT=$DOPPLER_PROJECT
+ENV MAIL_FROM=$MAIL_FROM
+ENV MAIL_HOST=$MAIL_HOST
+ENV MAIL_PASSWORD=$MAIL_PASSWORD
+ENV MAIL_PORT=$MAIL_PORT
+ENV MAIL_SERVICE=$MAIL_SERVICE
+ENV MAIL_USER=$MAIL_USER
+ENV SECRET=$SECRET
+
+# Instalar dependencias solo para producción
 RUN npm ci --production
 
 # Exponer el puerto de la aplicación
 EXPOSE 3000
 
 # Comando para iniciar la aplicación
-CMD ["doppler", "run", "--", "npm", "run", "start:prod"]
+CMD ["npm", "run", "start:prod"]
