@@ -33,4 +33,4 @@ jobs:
         run: docker compose down --rmi all
 
       - name: Deploy Docker container
-        run: docker compose up -d
+        run: docker compose up --build -d
