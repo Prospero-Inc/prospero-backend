@@ -15,8 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t prospero-backend:latest .
+      # - name: Build Docker image
+      #   run: docker build -t prospero-backend:latest .
 
       - name: Stop existing container
         run: |
