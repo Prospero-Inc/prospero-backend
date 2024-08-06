@@ -12,6 +12,7 @@ COPY prisma ./prisma/
 RUN apt-get update && apt-get install -y \
     python3 \
     build-essential \
+    openssl \
     && npm ci \
     && apt-get purge -y --auto-remove python3 build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -30,6 +31,9 @@ FROM node:18.16.0-slim
 
 # Establecer el directorio de trabajo
 WORKDIR /usr/src/app
+
+# Instalar OpenSSL
+RUN apt-get update && apt-get install -y openssl
 
 # Copiar los archivos necesarios desde la etapa de construcción
 COPY --from=builder /usr/src/app/package*.json ./
