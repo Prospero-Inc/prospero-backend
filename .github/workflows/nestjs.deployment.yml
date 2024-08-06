@@ -15,31 +15,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # - name: Build Docker image
-      #   run: docker build -t prospero-backend:latest .
+      - name: Build Docker image
+        run: docker build -t prospero-backend:latest .
 
       - name: Stop existing container
         run: |
-          docker compose down --rmi all
+          docker stop prospero-backend || true
+          docker rm prospero-backend || true
+
+      - name: Run Prisma migrations
+        run: |
+          docker run --rm \
+          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
+          prospero-backend:latest \
+          doppler run -- npx prisma migrate deploy
 
       - name: Deploy Docker container
         run: |
-          docker compose up -d
-      # - name: Stop existing container
-      #   run: |
-      #     docker stop prospero-backend || true
-      #     docker rm prospero-backend || true
-
-      # - name: Run Prisma migrations
-      #   run: |
-      #     docker run --rm \
-      #     -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
-      #     prospero-backend:latest \
-      #     doppler run -- npx prisma migrate deploy
-
-      # - name: Deploy Docker container
-      #   run: |
-      #     docker run -d -p 3000:3000 --name prospero-backend \
-      #     -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
-      #     prospero-backend:latest \
-      #     doppler run -- npm run start:prod
+          docker run -d -p 3000:3000 --name prospero-backend \
+          -e DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN_API }} \
+          prospero-backend:latest \
+          doppler run -- npm run start:prod
