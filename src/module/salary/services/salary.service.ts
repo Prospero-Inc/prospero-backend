@@ -13,28 +13,15 @@ export class SalaryService {
     this.strategy = strategy;
   }
 
-  async distributeSalary(userId: number, amount: CreateAmountDto) {
+  async createSalary(userId: number, amount: number) {
     try {
       if (!this.strategy) {
         throw new Error('Strategy not set');
       }
-      await await this.salaryRepository.distributeSalary(
-        userId,
-        amount,
-        this.strategy,
-      );
-
-      return { message: 'Salario distribuido exitosamente' };
-    } catch (error) {
-      throw new InternalServerErrorException('Error al distribuir el salario');
-    }
-  }
-
-  async createSalary(userId: number, amount: number) {
-    try {
-      await this.salaryRepository.createSalary(userId, amount);
+      await this.salaryRepository.createSalary(userId, amount, this.strategy);
       return { message: 'Salario creado exitosamente' };
     } catch (error) {
+      console.log(error);
       throw new InternalServerErrorException('Error al crear el salario');
     }
   }

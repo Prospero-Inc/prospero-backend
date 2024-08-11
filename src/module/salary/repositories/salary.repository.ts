@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/module/prisma.service';
-import { CreateAmountDto } from '../domain/dto/create-amount.dto';
 import { SalaryDistributionStrategy } from '../strategies/salary-distribution.strategy';
 import { CURRENT_MONTH, CURRENT_YEAR } from 'src/constants/date-fns';
 import { Mes } from '@prisma/client';
@@ -9,35 +8,22 @@ import { Mes } from '@prisma/client';
 export class SalaryRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async distributeSalary(
+  async createSalary(
     userId: number,
-    amount: CreateAmountDto,
+    amount: number,
     strategy: SalaryDistributionStrategy,
   ) {
-    const distribution = strategy.distributeSalary(amount.amount);
+    const distribution = strategy.distributeSalary(amount);
 
-    const salary = await this.prisma.salary.update({
-      where: {
-        userId,
-      },
-      data: {
-        amount: amount.amount,
-        distribution: {
-          create: distribution,
-        },
-      },
-    });
-
-    return salary;
-  }
-
-  async createSalary(userId: number, amount: number) {
     return await this.prisma.salary.create({
       data: {
         userId,
         year: 2024,
-        month: 'Enero',
+        month: 'Agosto',
         amount,
+        distribution: {
+          create: distribution,
+        },
       },
     });
   }

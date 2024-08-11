@@ -16,7 +16,7 @@ model User {
   activationToken    String?        @unique @map("activation_token")
   transactions       Transaction[]
   fixedExpenses      FixedExpense[]
-  salary             Salary?
+  salary             Salary[]
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
   apiKey             String?        @unique @map("api_key")
@@ -34,7 +34,7 @@ model User {
 
 model Transaction {
   id          Int             @id @default(autoincrement())
-  userId      Int             @unique @map("user_id")
+  userId      Int             @map("user_id")
   user        User            @relation(fields: [userId], references: [id])
   amount      Float
   date        DateTime
@@ -87,7 +87,7 @@ enum Mes {
 
 model Salary {
   id           Int           @id @default(autoincrement())
-  userId       Int           @unique @map("user_id")
+  userId       Int           @map("user_id")
   user         User          @relation(fields: [userId], references: [id])
   amount       Float
   month        Mes

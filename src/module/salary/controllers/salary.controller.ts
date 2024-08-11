@@ -21,25 +21,6 @@ import { SalaryDetailsDto } from '../dto/salary-details.dto';
 export class SalaryController {
   constructor(private readonly salaryService: SalaryService) {}
 
-  @Post('distribute/fifty-thirty-twenty')
-  @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Distribuir salario según la estrategia 50-30-20' })
-  @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
-  @ApiBody({
-    type: CreateAmountDto,
-    description: 'Detalles del monto a distribuir',
-  })
-  @ApiResponse({ status: 201, description: 'Salario distribuido exitosamente' })
-  @ApiResponse({ status: 500, description: 'Error al distribuir el salario' })
-  async distributeFiftyThirtyTwenty(
-    @Query('userId') userId: number,
-    @Body() createAmountDto: CreateAmountDto,
-  ) {
-    this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
-    return this.salaryService.distributeSalary(userId, createAmountDto);
-  }
-
   @Post()
   @ApiOperation({ summary: 'Crear un nuevo salario' })
   @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
@@ -65,6 +46,7 @@ export class SalaryController {
     @Query('userId') userId: number,
     @Body() createSalaryDto: CreateSalaryDto,
   ) {
+    this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
     const { amount } = createSalaryDto;
     return this.salaryService.createSalary(+userId, amount);
   }
