@@ -1,20 +1,20 @@
-name: Sync development branches
-on:
-  push:
-    branches:
-      - main
+# name: Sync development branches
+# on:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  sync-branches:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
+# jobs:
+#   sync-branches:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@master
 
-      - name: Merge main -> developer
-        uses: devmasx/merge-branch@master
-        with:
-          type: now
-          from_branch: main
-          message: '[auto-merge] Sync main -> developer (${{ github.sha }})'
-          target_branch: developer
-          github_token: ${{ secrets.SYNC_TOKEN }}
+#       - name: Merge main -> developer
+#         uses: devmasx/merge-branch@master
+#         with:
+#           type: now
+#           from_branch: main
+#           message: '[auto-merge] Sync main -> developer (${{ github.sha }})'
+#           target_branch: developer
+#           github_token: ${{ secrets.SYNC_TOKEN }}
