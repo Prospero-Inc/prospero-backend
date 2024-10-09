@@ -96,6 +96,7 @@ export class AuthController {
 
   @Get('profile')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(AuthGuard('bearer'))
   @ApiOperation({ summary: 'Obtener el perfil del usuario autenticado' })
   @ApiResponse({ status: 200, description: 'Perfil del usuario autenticado.' })
