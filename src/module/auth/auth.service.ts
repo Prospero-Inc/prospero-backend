@@ -120,8 +120,8 @@ export class AuthService {
     return await this.userService.disable2FA(userId);
   }
 
-  async validateUserByApiKey(apiKey: string) {
-    return await this.userService.findByApiKey(apiKey);
+  async validateUserByApiKey(email: string) {
+    return await this.userService.findByApiKey(email);
   }
 
   async activateUser(activateUserDto: ActivateUserDto) {
