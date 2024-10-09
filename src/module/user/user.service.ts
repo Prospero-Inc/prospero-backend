@@ -102,11 +102,22 @@ export class UserService {
     };
   }
 
-  async findByApiKey(apiKey: string): Promise<User> {
-    console.log('apiKey: ', apiKey);
+  async findByApiKey(email: string) {
     const user = await this.prisma.user.findUnique({
       where: {
-        apiKey,
+        email,
+      },
+      select: {
+        id: true,
+        username: true,
+        isActive: true,
+        isGoogleAccount: true,
+        activationToken: true,
+        enable2FA: true,
+        twoFASecret: true,
+        email: true,
+        lastName: true,
+        firstName: true,
       },
     });
 

@@ -102,7 +102,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
   getProfile(@Request() req) {
     return {
-      msg: 'authenticated with api key',
+      msg: 'Profile of authenticated user',
       user: req.user,
     };
   }
