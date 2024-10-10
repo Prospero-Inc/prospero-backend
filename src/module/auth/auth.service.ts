@@ -74,14 +74,13 @@ export class AuthService {
   }
 
   async enable2FA(userId: number): Promise<Enable2FAType> {
-    console.log('enable2FA');
     const user = await this.userService.findById(userId);
     if (user.enable2FA) {
       return { secret: user.twoFASecret };
     }
 
     const secret = speakeasy.generateSecret();
-    user.twoFASecret = secret.otpauth_url;
+    user.twoFASecret = secret.base32;
     await this.userService.updateSecretKey(user.id, user.twoFASecret);
     return { secret: user.twoFASecret };
   }
