@@ -48,7 +48,7 @@ export class UserService {
     }
   }
 
-  async updateSecretKey(id: number, secret: string) {
+  async updateSecretKey(id: number, secret: string, qr: string) {
     return await this.prisma.user.update({
       where: {
         id,
@@ -56,6 +56,7 @@ export class UserService {
       data: {
         twoFASecret: secret,
         enable2FA: true,
+        qr2FA: qr,
       },
     });
   }

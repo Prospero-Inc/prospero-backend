@@ -22,6 +22,7 @@ model User {
   apiKey             String?        @unique @map("api_key")
   enable2FA          Boolean        @default(false) @map("enable_2fa")
   twoFASecret        String?        @map("2fa_secret")
+  qr2FA              String?        @map("qr_2fa")
   password           String?
   email              String         @unique
   lastName           String?        @map("last_name")

@@ -76,13 +76,19 @@ export class AuthService {
   async enable2FA(userId: number): Promise<Enable2FAType> {
     const user = await this.userService.findById(userId);
     if (user.enable2FA) {
-      return { secret: user.twoFASecret };
+      return { secret: user.twoFASecret, qr: user.qr2FA };
     }
 
     const secret = speakeasy.generateSecret();
+    console.log({ secret });
     user.twoFASecret = secret.base32;
-    await this.userService.updateSecretKey(user.id, user.twoFASecret);
-    return { secret: user.twoFASecret };
+    user.qr2FA = secret.otpauth_url;
+    await this.userService.updateSecretKey(
+      user.id,
+      user.twoFASecret,
+      user.qr2FA,
+    );
+    return { secret: user.twoFASecret, qr: secret.otpauth_url };
   }
 
   async validate2FAToken(

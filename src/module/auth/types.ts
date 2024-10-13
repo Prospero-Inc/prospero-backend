@@ -5,4 +5,5 @@ export interface PayloadType {
 
 export type Enable2FAType = {
   secret: string;
+  qr: string;
 };

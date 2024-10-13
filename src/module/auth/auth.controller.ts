@@ -57,6 +57,7 @@ export class AuthController {
 
   @Get('enable-2fa')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Habilitar autenticación de dos factores (2FA)' })
   @ApiResponse({ status: 200, description: '2FA habilitado con éxito.' })
@@ -67,6 +68,7 @@ export class AuthController {
 
   @Post('validate-2fa')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Validar el token de 2FA' })
   @ApiResponse({ status: 200, description: 'Token de 2FA validado con éxito.' })
@@ -86,6 +88,7 @@ export class AuthController {
 
   @Get('disable-2fa')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Deshabilitar autenticación de dos factores (2FA)' })
   @ApiResponse({ status: 200, description: '2FA deshabilitado con éxito.' })
