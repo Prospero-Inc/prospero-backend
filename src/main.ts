@@ -40,7 +40,7 @@ async function bootstrap() {
   app.setViewEngine('hbs');
 
   const config = new DocumentBuilder()
-    .setTitle('Prospero API documentation')
+    .setTitle('Prospero API documentation UNAB!!!!!!!!!')
     .setDescription('The Prospero API description')
     .setVersion('1.0')
     .addServer('http://localhost:3000/api/', 'Local environment')
