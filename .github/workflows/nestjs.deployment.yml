@@ -14,7 +14,6 @@ jobs:
         node-version: [18.16.0]
 
     env:
-      NODE_ENV: production
       API_BASE_URL: ${{ secrets.API_BASE_URL }}
       API_BASE_URL_RESET: ${{ secrets.API_BASE_URL_RESET }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -48,5 +47,7 @@ jobs:
           docker compose down --rmi all
 
       - name: Deploy Docker container
+        env:
+          NODE_ENV: production
         run: |
           docker compose up --build -d
