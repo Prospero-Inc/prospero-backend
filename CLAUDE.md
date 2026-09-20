@@ -83,6 +83,11 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
   API-key/service-to-service auth strategy anymore (the old `ApiKeyStrategy` decoded JWTs without
   verifying their signature — a real auth bypass — and was removed); `role-auth.guard.ts` was
   also removed as dead code (it referenced a `role` field that doesn't exist on `User`).
+  App-wide rate limiting is `@nestjs/throttler`, wired as a global `APP_GUARD` in
+  `app.module.ts` (60 req/min/IP default). `signup`, `login`, `login/verify-2fa`,
+  `request-reset-password`, and `reset-password/:token` override it with tighter per-route
+  `@Throttle()` limits (3–5 req/min) — those are the ones that either send a real email or are
+  brute-force targets, which is what actually costs money/risks abuse on a small instance.
 - **salary** (income) — `POST /salary` (create), `PATCH /salary/:id` (edit date/amount/type,
   ownership-checked), `GET /salary/details` (current calendar-month view, spec §3.3), `GET
   /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
