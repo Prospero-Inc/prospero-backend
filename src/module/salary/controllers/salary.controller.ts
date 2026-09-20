@@ -63,6 +63,13 @@ export class SalaryController {
     return this.salaryService.create(req.user.userId, createSalaryDto);
   }
 
+  @Get()
+  @ApiOperation({ summary: 'Listar todos los ingresos del usuario' })
+  async findAll(@Request() req) {
+    const salaries = await this.salaryService.findAllForUser(req.user.userId);
+    return [...salaries].reverse();
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Editar un ingreso existente' })
   @ApiResponse({ status: 200, description: 'Ingreso actualizado con éxito.' })
