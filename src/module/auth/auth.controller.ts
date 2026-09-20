@@ -23,6 +23,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ActivateUserDto, VerifyLoginTwoFactorDto } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -37,6 +38,7 @@ export class AuthController {
   ) {}
 
   @Post('signup')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
   @ApiResponse({
     status: 201,
@@ -48,6 +50,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Iniciar sesión con un usuario registrado' })
   @ApiResponse({ status: 200, description: 'Inicio de sesión exitoso.' })
   @ApiResponse({ status: 401, description: 'Credenciales incorrectas.' })
@@ -56,6 +59,7 @@ export class AuthController {
   }
 
   @Post('login/verify-2fa')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Verificar el código 2FA durante el login y obtener el acceso',
   })
@@ -147,6 +151,7 @@ export class AuthController {
   }
 
   @Patch('/request-reset-password')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({ summary: 'Restablecer la contraseña de un usuario' })
   @ApiResponse({
     status: 200,
@@ -160,6 +165,7 @@ export class AuthController {
   }
 
   @Post('/reset-password/:token')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resetPassword(
     @Param('token') token: string,
     @Body()
