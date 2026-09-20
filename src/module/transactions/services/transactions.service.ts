@@ -6,13 +6,21 @@ import {
   TransactionsRepository,
 } from '../repositories/transactions.repository';
 
+// fixedExpenseId is intentionally absent from CreateTransactionDto (the
+// public HTTP contract, guarded by the global whitelist ValidationPipe) so
+// no external client can link a transaction to an arbitrary fixed expense.
+// Only internal callers (FixedExpensesService.pay) may set it.
+export interface CreateTransactionInput extends CreateTransactionDto {
+  fixedExpenseId?: number;
+}
+
 @Injectable()
 export class TransactionsService {
   constructor(
     private readonly transactionsRepository: TransactionsRepository,
   ) {}
 
-  create(userId: number, createTransactionDto: CreateTransactionDto) {
+  create(userId: number, createTransactionDto: CreateTransactionInput) {
     return this.transactionsRepository.create(userId, createTransactionDto);
   }
 

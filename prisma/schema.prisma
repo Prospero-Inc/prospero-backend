@@ -51,6 +51,8 @@ model Transaction {
   category       BudgetCategory
   description    String?
   periodOverride PeriodOverride? @map("period_override")
+  fixedExpenseId Int?            @map("fixed_expense_id")
+  fixedExpense   FixedExpense?   @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
@@ -70,18 +72,20 @@ enum PeriodOverride {
 }
 
 model FixedExpense {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @unique @map("user_id")
-  user        User     @relation(fields: [userId], references: [id])
-  amount      Float
-  category    String
-  dueDate     DateTime @map("due_date")
-  reminder    Boolean
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id             Int            @id @default(autoincrement())
+  userId         Int            @map("user_id")
+  user           User           @relation(fields: [userId], references: [id])
+  amount         Float
+  name           String
+  budgetCategory BudgetCategory @map("budget_category")
+  dueDate        DateTime       @map("due_date")
+  reminder       Boolean
+  description    String?
+  transactions   Transaction[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  @@index([dueDate, category], name: "fixed_expense_due_date_category_idx")
+  @@index([userId, dueDate], name: "fixed_expense_user_due_date_idx")
   @@map("fixed_expenses")
 }
 

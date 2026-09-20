@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/module/prisma.service';
-import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
+import { CreateTransactionInput } from '../services/transactions.service';
 
 export interface TransactionFilters {
   from?: Date;
@@ -12,7 +12,7 @@ export interface TransactionFilters {
 export class TransactionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(userId: number, data: CreateTransactionDto) {
+  create(userId: number, data: CreateTransactionInput) {
     return this.prisma.transaction.create({
       data: {
         ...data,

@@ -62,9 +62,13 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
   `Ahorro`, spec §4), not free text. `periodOverride` (`Previous` | `Current`, nullable) lets a
   transaction be manually pinned to a period other than the one its `date` would naturally
   resolve to (spec §3.4's "override manual").
-- `FixedExpense` — recurring expense records (one-to-one with `User` currently, `@unique` on
-  `userId`), separate from `Transaction`. Not touched by the periods work; still only supports
-  one row per user.
+- `FixedExpense` — recurring expense records, many-per-user (`userId` no longer `@unique`).
+  `name` is the free-text label (e.g. "Renta"); `budgetCategory` is the same `BudgetCategory`
+  enum as `Transaction.category`, used to attribute the expense to a distribution when paid.
+  `dueDate` only carries meaning as a day-of-month (`getUTCDate()`) — see `fixed-expenses`
+  below. `Transaction.fixedExpenseId` (nullable, `onDelete: SetNull`) links a transaction back
+  to the fixed expense that generated it, without exposing that field on the public
+  `POST /transactions` DTO.
 
 ### Modules (`src/module/`)
 
@@ -106,6 +110,26 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
   `TransactionsRepository` (Prisma) and `TransactionsService`. Every read/write is scoped to
   `req.user.userId`; `update`/`remove` look the row up by `(id, userId)` first and throw
   `NotFoundException` if it isn't the caller's, so one user can never touch another's rows.
+  `TransactionsService.create` takes a `CreateTransactionInput` (the public DTO plus an optional
+  `fixedExpenseId`) rather than `CreateTransactionDto` directly — only internal callers (`
+  fixed-expenses`) can set that field; the global `whitelist: true` `ValidationPipe` rejects it
+  on the public `POST /transactions` body.
+- **fixed-expenses** (`src/module/fixed-expenses/`) — CRUD for `FixedExpense` plus
+  `POST /fixed-expenses/:id/pay`, calqued on `transactions`' Controller → Service → Repository
+  layering. Deliberately does **not** touch `periods.service.ts` or duplicate its aggregation:
+  paying a fixed expense just creates a normal `Transaction` (via `TransactionsService.create`,
+  with `fixedExpenseId` set) tagged with the fixed expense's `budgetCategory`, so it flows
+  through the exact same period/dashboard math every other transaction does.
+  `occurrence.util.ts`'s `resolveOccurrenceDate(dueDate, referenceDate)` is the key piece: a
+  `FixedExpense.dueDate` only means "day of the month" (e.g. the 9th) — the function rebuilds
+  that day-of-month in the month containing `referenceDate` (clamped to that month's length),
+  so a bill due the 9th and one due the 18th always resolve to the correct half-month period
+  regardless of which day the user actually clicks "pay" on. `pay()` uses this to find the
+  current cycle's occurrence date, checks whether a `Transaction` with that `fixedExpenseId`
+  already resolves to the same period (`ConflictException`/409 if so, to catch double-pay
+  clicks), and otherwise creates one dated at the occurrence — not at "today". `GET
+  /fixed-expenses` reuses the identical computation to annotate each item with
+  `paidThisCycle: boolean`, so the frontend never reimplements period/occurrence logic.
 - **user** — user CRUD/service backing auth (registration, profile, budget settings).
 - **mail** — `@nestjs-modules/mailer` + `hbs` templates (`module/mail/templates`) for
   activation and password-reset emails; the reset link points at the separate
@@ -116,15 +140,13 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
 ### Product spec vs. current implementation
 
 See `../docs/spec.md`. Auth, the salary/profile IDORs, transactions CRUD, dynamic periods
-(spec §3) and configurable budget percentages (spec §4) are now implemented — see `periods` and
-`salary` above. What's still genuinely missing:
-- `FixedExpense.userId` is `@unique`, so only one fixed expense per user can exist — unrelated to
-  the periods work, not touched.
+(spec §3), configurable budget percentages (spec §4) and fixed expenses (multi-row per user,
+paid-into-a-transaction) are now implemented — see `periods`, `salary` and `fixed-expenses`
+above. Frontend is wired to all of it (`prospero-front/CLAUDE.md`). What's still genuinely
+missing:
 - No email-ingestion module (bank notification parsing, dedupe, pending-confirmation state).
-- No push notification implementation anywhere in either repo.
-- Frontend does not yet consume `/periods/*` or the new `/salary`/`/transactions` shapes
-  (category enum, `date`/`type` on income) — it was intentionally left on the old contract for
-  this pass; wiring Entries/Expenditures/Dashboard/Settings to the new backend is the next phase.
+- No push notification implementation anywhere in either repo — `FixedExpense.reminder` is
+  stored but nothing reads it yet.
 
 Confirm with the co-founder before building any of the still-missing items — treat them as
 separate planned phases, not something to start opportunistically.

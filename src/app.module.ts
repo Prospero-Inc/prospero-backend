@@ -7,6 +7,7 @@ import { MailModule } from './module/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
 import { TransactionsModule } from './module/transactions/transactions.module';
 import { PeriodsModule } from './module/periods/periods.module';
+import { FixedExpensesModule } from './module/fixed-expenses/fixed-expenses.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PeriodsModule } from './module/periods/periods.module';
     MailModule,
     TransactionsModule,
     PeriodsModule,
+    FixedExpensesModule,
   ],
   controllers: [],
   providers: [],
