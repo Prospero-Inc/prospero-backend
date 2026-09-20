@@ -12,12 +12,15 @@ import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
 import { ActivateUserDto } from './dto';
 import { User } from '@prisma/client';
-import { AccessTokenResponse } from './interfaces';
+import { AccessTokenResponse, RequiresTwoFactorResponse } from './interfaces';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { MailService } from '../mail/mail.service';
 import { v4 as uuid4 } from 'uuid';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { translate } from 'src/lib/i18n';
+import { PayloadType } from './types';
+
+const PRE_AUTH_TOKEN_TTL = '5m';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +32,7 @@ export class AuthService {
 
   async login(
     loginDTO: LoginDTO,
-  ): Promise<AccessTokenResponse | { validate2FA: string; message: string }> {
+  ): Promise<AccessTokenResponse | RequiresTwoFactorResponse> {
     const user = await this.userService.findOne(loginDTO.email);
 
     const passwordMatched = await bcrypt.compare(
@@ -47,30 +50,70 @@ export class AuthService {
       throw new ForbiddenException(translate('exception.inactiveUser'));
     }
 
-    const payload = { email: user.email, userId: user.id };
-
-    if (passwordMatched) {
-      if (user.enable2FA && user.twoFASecret) {
-        return {
-          validate2FA: 'http://localhost:3000/auth/validate-2fa',
-          message: `${translate('exception.otpRequired')}`,
-        };
-      }
+    if (user.enable2FA && user.twoFASecret) {
+      const preAuthToken = this.jwtService.sign(
+        { email: user.email, userId: user.id, pending2FA: true },
+        { expiresIn: PRE_AUTH_TOKEN_TTL },
+      );
 
       return {
-        accessToken: this.jwtService.sign(payload),
-        user: {
-          id: user.id,
-          name: `${user.firstName} ${user.lastName}`,
-          email: user.email,
-          username: user.username,
-        },
+        requires2FA: true,
+        preAuthToken,
+        message: `${translate('exception.otpRequired')}`,
       };
     }
 
-    throw new UnauthorizedException(
-      translate('exception.passwordDoesNotMatch'),
-    );
+    return this.buildAccessTokenResponse(user);
+  }
+
+  async verifyLoginTwoFactor(
+    preAuthToken: string,
+    token: string,
+  ): Promise<AccessTokenResponse> {
+    let payload: PayloadType;
+    try {
+      payload = this.jwtService.verify<PayloadType>(preAuthToken);
+    } catch (error) {
+      throw new UnauthorizedException(
+        translate('exception.errorVerifyingToken'),
+      );
+    }
+
+    if (!payload.pending2FA) {
+      throw new UnauthorizedException(
+        translate('exception.errorVerifyingToken'),
+      );
+    }
+
+    const user = await this.userService.findById(payload.userId);
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFASecret,
+      token,
+      encoding: 'base32',
+      window: 1,
+    });
+
+    if (!verified) {
+      throw new UnauthorizedException(
+        translate('exception.errorVerifyingToken'),
+      );
+    }
+
+    return this.buildAccessTokenResponse(user);
+  }
+
+  private buildAccessTokenResponse(user: User): AccessTokenResponse {
+    const payload = { email: user.email, userId: user.id };
+
+    return {
+      accessToken: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        username: user.username,
+      },
+    };
   }
 
   async enable2FA(userId: number): Promise<Enable2FAType> {
@@ -124,10 +167,6 @@ export class AuthService {
 
   async disable2FA(userId: number) {
     return await this.userService.disable2FA(userId);
-  }
-
-  async validateUserByApiKey(email: string) {
-    return await this.userService.findByApiKey(email);
   }
 
   async activateUser(activateUserDto: ActivateUserDto) {

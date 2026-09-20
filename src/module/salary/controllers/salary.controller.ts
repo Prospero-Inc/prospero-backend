@@ -1,4 +1,12 @@
-import { Body, Controller, Post, Query, Get, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Get,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { SalaryService } from '../services/salary.service';
 import { CreateAmountDto } from '../domain/dto/create-amount.dto';
 import { FiftyThirtyTwentyStrategy } from '../strategies/fifty-thirty-twenty.strategy';
@@ -22,8 +30,9 @@ export class SalaryController {
   constructor(private readonly salaryService: SalaryService) {}
 
   @Post()
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Crear un nuevo salario' })
-  @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
   @ApiBody({
     type: CreateSalaryDto,
     description: 'Detalles del salario a crear',
@@ -42,13 +51,10 @@ export class SalaryController {
       example: { statusCode: 500, message: 'Error al crear el salario' },
     },
   })
-  async createSalary(
-    @Query('userId') userId: number,
-    @Body() createSalaryDto: CreateSalaryDto,
-  ) {
+  async createSalary(@Request() req, @Body() createSalaryDto: CreateSalaryDto) {
     this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
     const { amount } = createSalaryDto;
-    return this.salaryService.createSalary(+userId, amount);
+    return this.salaryService.createSalary(req.user.userId, amount);
   }
 
   @Get('distribute/preview')
@@ -76,12 +82,9 @@ export class SalaryController {
   }
 
   @Get('details')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Obtener detalles del salario del usuario' })
-  @ApiQuery({
-    name: 'userId',
-    type: Number,
-    description: 'ID del usuario para obtener detalles del salario',
-  })
   @ApiOkResponse({
     description: 'Detalles del salario obtenidos exitosamente',
     type: SalaryDetailsDto,
@@ -89,7 +92,7 @@ export class SalaryController {
   @ApiInternalServerErrorResponse({
     description: 'Error al obtener los detalles del salario',
   })
-  async getUserSalaryDetails(@Query('userId') userId: number) {
-    return this.salaryService.getUserSalaryDetails(+userId);
+  async getUserSalaryDetails(@Request() req) {
+    return this.salaryService.getUserSalaryDetails(req.user.userId);
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User } from '@prisma/client';
 import { CreateUserDTO } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { v4 as uuid4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
@@ -103,29 +104,51 @@ export class UserService {
     };
   }
 
-  async findByApiKey(email: string) {
+  async findProfileById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: {
-        email,
+        id,
       },
       select: {
         id: true,
         username: true,
         isActive: true,
         isGoogleAccount: true,
-        activationToken: true,
         enable2FA: true,
-        twoFASecret: true,
         email: true,
         lastName: true,
         firstName: true,
+        createdAt: true,
       },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Could not find user 3');
+      throw new UnauthorizedException('Could not find user');
     }
     return user;
+  }
+
+  async updateProfile(id: number, data: UpdateUserDto) {
+    try {
+      return await this.prisma.user.update({
+        where: {
+          id,
+        },
+        data,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new UnauthorizedException('Username already exists');
+      }
+      throw error;
+    }
   }
 
   async findOneInactiveByIdActivationToken(

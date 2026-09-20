@@ -6,12 +6,8 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
-
-export enum TransactionType {
-  FixedExpense = 'FixedExpense',
-  VariableExpense = 'VariableExpense',
-  Savings = 'Savings',
-}
+import { TransactionType } from '@prisma/client';
+import { Type } from 'class-transformer';
 
 export class CreateTransactionDto {
   @IsNumber()
@@ -19,6 +15,7 @@ export class CreateTransactionDto {
   amount: number;
 
   @IsDate()
+  @Type(() => Date)
   date: Date;
 
   @IsString()
