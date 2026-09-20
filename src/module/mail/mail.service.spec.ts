@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { MailerService } from '@nestjs-modules/mailer';
 import { MailService } from './mail.service';
 
 describe('MailService', () => {
@@ -6,7 +7,10 @@ describe('MailService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [MailService],
+      providers: [
+        MailService,
+        { provide: MailerService, useValue: { sendMail: jest.fn() } },
+      ],
     }).compile();
 
     service = module.get<MailService>(MailService);
