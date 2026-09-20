@@ -1,96 +1,105 @@
-# Deployment
+# Despliegue
 
-This repo already ships with a working CI/CD pipeline
-(`.github/workflows/nestjs.deployment.yml`): every push to `developer`
-runs lint + unit tests, then rebuilds and restarts the app via Docker
-Compose. It deploys **immediately on push to `developer`** — there's no
-staging branch/gate in front of it, so treat `developer` as production.
+Este repo ya trae un pipeline de CI/CD funcionando
+(`.github/workflows/nestjs.deployment.yml`): cada push a `developer` corre
+lint + tests unitarios, y luego reconstruye y reinicia la app vía Docker
+Compose. **Despliega de inmediato al hacer push a `developer`** — no hay
+una rama de staging de por medio, así que trata `developer` como
+producción.
 
-It runs on a **self-hosted GitHub Actions runner**, not GitHub's own
-infrastructure — meaning you point it at a real server you control.
-Decided host: **Google Cloud's Always Free e2-micro VM**.
+Corre sobre un **runner self-hosted de GitHub Actions**, no en la
+infraestructura de GitHub — o sea que apunta a un servidor real que tú
+controlas. Servidor elegido: **una instancia EC2 nueva en AWS** (separada
+de la instancia que ya tienes para otra cosa).
 
-## One-time server setup (Google Cloud)
+> **Nota de costo:** el free tier de EC2 (750 hrs/mes de `t2.micro` o
+> `t3.micro`) solo es gratis los **primeros 12 meses** de la cuenta AWS —
+> después se cobra. Si es una cuenta ya vieja o el trial ya se usó, esta
+> instancia no será gratis.
 
-1. Create a GCP project (console.cloud.google.com) and enable the Compute
-   Engine API. A card is required for identity verification, but Always
-   Free resources don't charge as long as you stay within the limits
-   below.
-2. Create the VM — **the free tier only applies in `us-west1`,
-   `us-central1`, or `us-east1`, on an `e2-micro`, with a *standard*
-   (not SSD) persistent disk up to 30GB**. Outside those constraints you
-   will be billed.
+## Configuración inicial del servidor (AWS EC2)
+
+1. En la consola de AWS (EC2 → "Launch instance"), lanza una instancia
+   **nueva** (no reutilices la que ya tienes):
+   - Tipo: `t2.micro` o `t3.micro` (elegible para free tier).
+   - AMI: Ubuntu Server 22.04/24.04 LTS (o Amazon Linux 2023, lo que
+     prefieras — los comandos de abajo asumen Ubuntu/Debian).
+   - Storage: 30GB gp3 (dentro del free tier de EBS).
+   - Crea o reutiliza un par de llaves SSH para poder conectarte.
+2. **Elastic IP (recomendado):** la IP pública de una EC2 normal cambia
+   cada vez que la paras/reinicias. Asigna una Elastic IP y asóciala a la
+   instancia (gratis mientras esté asociada a una instancia corriendo) —
+   si no, cada reinicio te obliga a actualizar DNS/variables de entorno.
+3. **Security Group** — abre los puertos que necesita cada app (además
+   del 22/SSH, que ya viene permitido por defecto):
+   - Puerto 3000 → esta API.
+   - Puerto 4000 → `prospero-front`.
+   - Puerto 5173 → `prosper-change-password` (nginx).
+
+   Desde la consola: EC2 → Security Groups → tu grupo → "Edit inbound
+   rules" → agrega una regla TCP por cada puerto (origen `0.0.0.0/0` si
+   quiere ser público).
+4. Conéctate por SSH y instala Docker + el plugin de Compose:
    ```bash
-   gcloud compute instances create prospero-server \
-     --zone=us-central1-a \
-     --machine-type=e2-micro \
-     --image-family=debian-12 --image-project=debian-cloud \
-     --boot-disk-size=30GB --boot-disk-type=pd-standard \
-     --tags=prospero-server
+   ssh -i tu-llave.pem ubuntu@<IP-de-la-instancia>
+   curl -fsSL https://get.docker.com | sudo sh
+   sudo usermod -aG docker $USER
+   # cierra sesión y vuelve a entrar para que el grupo docker tome efecto
    ```
-3. Open the ports each app needs (SSH/22 is allowed by GCP's default
-   network already):
-   ```bash
-   gcloud compute firewall-rules create prospero-app-ports \
-     --allow=tcp:3000,tcp:4000,tcp:5173 \
-     --target-tags=prospero-server
-   ```
-   (3000 = this API, 4000 = `prospero-front`, 5173 =
-   `prosper-change-password`'s nginx.)
-4. SSH in (`gcloud compute ssh prospero-server`), install Docker + the
-   Compose plugin, then create the external network all three repos
-   expect to already exist:
+5. Crea la red externa de Docker que los tres repos esperan que ya
+   exista:
    ```bash
    docker network create prospero
    ```
-5. Register the server as a self-hosted runner **separately for each
-   repo** (this one, `prospero-front`, `prosper-change-password`): GitHub
-   → repo → Settings → Actions → Runners → "New self-hosted runner",
-   follow the install script it gives you. All three can share this one
-   VM.
-6. A real Postgres database. **Don't self-host it on this VM** —
-   `e2-micro` only has 1GB RAM, and Postgres + this API + the frontend +
-   nginx all running at once on that is tight. Use a managed free tier
-   instead (Neon or Supabase — no server maintenance, generous free
-   limits) and get the connection string(s) from whichever you pick.
+6. Registra el servidor como runner self-hosted **por separado en cada
+   repo** (este, `prospero-front`, `prosper-change-password`): GitHub →
+   el repo → Settings → Actions → Runners → "New self-hosted runner", y
+   sigue el script de instalación que te da. Los tres pueden compartir
+   esta misma instancia.
+7. Una base de datos Postgres real. **No la autoalojes en esta
+   instancia** — `t2.micro`/`t3.micro` solo tienen 1GB de RAM, y entre
+   esta API + el frontend + nginx ya va justo. Usa un free tier
+   administrado (Neon o Supabase — sin mantenimiento, límites generosos)
+   y saca la cadena de conexión de ahí.
 
-## Required GitHub Actions secrets
+## Secretos requeridos en GitHub Actions
 
-Set these under this repo's Settings → Secrets and variables → Actions:
+Configúralos en Settings → Secrets and variables → Actions de este repo:
 
-| Secret | What it is |
+| Secreto | Qué es |
 |---|---|
-| `DATABASE_URL` | Postgres connection string (pooled, if your provider distinguishes) |
-| `DIRECT_URL` | Postgres connection string used for migrations (unpooled, if applicable) |
-| `SECRET` | JWT signing secret — any long random string, e.g. `openssl rand -hex 32` |
-| `API_BASE_URL` | This API's own public base URL, **must end with a trailing slash** (used to build the account-activation link) |
-| `API_BASE_URL_RESET` | Public URL of the deployed `prosper-change-password` app, **must end with a trailing slash** |
-| `MAIL_HOST` | SMTP host of whichever provider you're sending real email through |
-| `MAIL_PORT` | SMTP port (587 for STARTTLS — matches this codebase's hardcoded `secure: false`) |
-| `MAIL_USER` | SMTP username |
-| `MAIL_PASSWORD` | SMTP password / API key |
-| `MAIL_FROM` | The address emails should appear to come from |
-| `MAIL_SERVICE` | Only needed if your provider is one of nodemailer's "well-known services" (e.g. `gmail`) — leave unset otherwise |
+| `DATABASE_URL` | Cadena de conexión a Postgres (pooled, si tu proveedor distingue) |
+| `DIRECT_URL` | Cadena de conexión usada para migraciones (unpooled, si aplica) |
+| `SECRET` | Clave para firmar los JWT — cualquier string largo y aleatorio, ej. `openssl rand -hex 32` |
+| `API_BASE_URL` | URL pública de esta misma API, **debe terminar en `/`** (se usa para armar el link de activación de cuenta) |
+| `API_BASE_URL_RESET` | URL pública de `prosper-change-password` ya desplegado, **debe terminar en `/`** |
+| `MAIL_HOST` | Host SMTP del proveedor que estés usando para correo real |
+| `MAIL_PORT` | Puerto SMTP (587 para STARTTLS — coincide con el `secure: false` fijo en el código) |
+| `MAIL_USER` | Usuario SMTP |
+| `MAIL_PASSWORD` | Contraseña / API key SMTP |
+| `MAIL_FROM` | Dirección que aparecerá como remitente |
+| `MAIL_SERVICE` | Solo si tu proveedor es uno de los "well-known services" de nodemailer (ej. `gmail`) — déjalo vacío si no |
 
-None of these values live in this repo. Local dev keeps using the
-throwaway Mailpit/Postgres values already in the workspace-root
-`docker-compose.yml` — that file is intentionally untouched by this.
+Ninguno de estos valores vive en este repo. El desarrollo local sigue
+usando los valores descartables de Mailpit/Postgres que ya están en el
+`docker-compose.yml` de la raíz del workspace — ese archivo queda
+intacto, no lo toca nada de esto.
 
-## Deploying
+## Desplegar
 
-Once the runner is registered and the secrets are set:
+Una vez registrado el runner y configurados los secretos:
 
 ```bash
 git push origin developer
 ```
 
-The workflow lints, tests, then runs `docker compose down --rmi all &&
-docker compose up --build -d` on the runner. Watch it under the repo's
-Actions tab.
+El workflow corre lint, tests, y luego `docker compose down --rmi all &&
+docker compose up --build -d` en el runner. Míralo en la pestaña Actions
+del repo.
 
-## Other repos
+## Otros repos
 
-`prospero-front` and `prosper-change-password` each deploy separately
-(their own self-hosted runner + repo secrets) but need to reach this API,
-so they must run on the same VM/Docker network (`prospero`, created
-above) — see their own `DEPLOYMENT.md` files.
+`prospero-front` y `prosper-change-password` despliegan por separado (su
+propio runner self-hosted + secretos de cada repo), pero necesitan llegar
+a esta API — así que deben correr en el mismo servidor/red de Docker
+(`prospero`, creada arriba). Ver el `DEPLOYMENT.md` de cada uno.
