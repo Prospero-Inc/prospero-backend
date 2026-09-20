@@ -41,33 +41,10 @@ COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/public ./public
 
-# Definir argumentos de construcción
-ARG NODE_ENV
-ARG API_BASE_URL
-ARG API_BASE_URL_RESET
-ARG DATABASE_URL
-ARG DIRECT_URL
-ARG MAIL_FROM
-ARG MAIL_HOST
-ARG MAIL_PASSWORD
-ARG MAIL_PORT
-ARG MAIL_SERVICE
-ARG MAIL_USER
-ARG SECRET
-
-# Establecer variables de entorno
-ENV NODE_ENV=$NODE_ENV
-ENV API_BASE_URL=$API_BASE_URL
-ENV API_BASE_URL_RESET=$API_BASE_URL_RESET
-ENV DATABASE_URL=$DATABASE_URL
-ENV DIRECT_URL=$DIRECT_URL
-ENV MAIL_FROM=$MAIL_FROM
-ENV MAIL_HOST=$MAIL_HOST
-ENV MAIL_PASSWORD=$MAIL_PASSWORD
-ENV MAIL_PORT=$MAIL_PORT
-ENV MAIL_SERVICE=$MAIL_SERVICE
-ENV MAIL_USER=$MAIL_USER
-ENV SECRET=$SECRET
+# No build ARGs here on purpose: none of these vars affect what gets
+# compiled (NestJS reads them from process.env at runtime, not at build
+# time), so they're supplied via docker-compose.yml's `environment:`
+# instead — that also means they never get baked into an image layer.
 
 # Instalar dependencias solo para producción
 RUN npm ci --production
