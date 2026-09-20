@@ -6,7 +6,7 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
-import { TransactionType } from '@prisma/client';
+import { BudgetCategory, PeriodOverride } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class CreateTransactionDto {
@@ -18,13 +18,14 @@ export class CreateTransactionDto {
   @Type(() => Date)
   date: Date;
 
-  @IsString()
-  category: string;
+  @IsEnum(BudgetCategory)
+  category: BudgetCategory;
 
   @IsString()
   @IsOptional()
   description?: string;
 
-  @IsEnum(TransactionType)
-  type: TransactionType;
+  @IsOptional()
+  @IsEnum(PeriodOverride)
+  periodOverride?: PeriodOverride;
 }

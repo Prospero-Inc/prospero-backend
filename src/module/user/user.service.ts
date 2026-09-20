@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User } from '@prisma/client';
 import { CreateUserDTO } from './dto/create-user.dto';
@@ -119,6 +123,10 @@ export class UserService {
         lastName: true,
         firstName: true,
         createdAt: true,
+        payFrequency: true,
+        needsPercent: true,
+        wantsPercent: true,
+        savingsPercent: true,
       },
     });
 
@@ -129,6 +137,22 @@ export class UserService {
   }
 
   async updateProfile(id: number, data: UpdateUserDto) {
+    const { needsPercent, wantsPercent, savingsPercent } = data;
+    const percentagesProvided = [needsPercent, wantsPercent, savingsPercent];
+    if (percentagesProvided.some((value) => value !== undefined)) {
+      if (percentagesProvided.some((value) => value === undefined)) {
+        throw new BadRequestException(
+          'needsPercent, wantsPercent and savingsPercent must be provided together',
+        );
+      }
+      const sum = needsPercent + wantsPercent + savingsPercent;
+      if (Math.abs(sum - 1) > 0.001) {
+        throw new BadRequestException(
+          'needsPercent + wantsPercent + savingsPercent must add up to 1',
+        );
+      }
+    }
+
     try {
       return await this.prisma.user.update({
         where: {
@@ -141,6 +165,10 @@ export class UserService {
           email: true,
           firstName: true,
           lastName: true,
+          payFrequency: true,
+          needsPercent: true,
+          wantsPercent: true,
+          savingsPercent: true,
         },
       });
     } catch (error) {

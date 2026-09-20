@@ -6,6 +6,7 @@ import { SalaryModule } from './module/salary/salary.module';
 import { MailModule } from './module/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
 import { TransactionsModule } from './module/transactions/transactions.module';
+import { PeriodsModule } from './module/periods/periods.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { TransactionsModule } from './module/transactions/transactions.module';
     SalaryModule,
     MailModule,
     TransactionsModule,
+    PeriodsModule,
   ],
   controllers: [],
   providers: [],

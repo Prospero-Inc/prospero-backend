@@ -49,14 +49,22 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
 ### Domain model (`prisma/schema.prisma`)
 
 - `User` — auth fields (`password`, `apiKey`, `enable2FA`/`twoFASecret`/`qr2FA` for TOTP,
-  `activationToken`, `resetPasswordToken`), plus `isGoogleAccount` for OAuth users.
-- `Salary` (per user/month/year) has one optional `Distribution` — the fixed/variable/savings
-  breakdown produced by the budget-distribution logic.
-- `Transaction` — typed via `TransactionType` enum (`FixedExpense` | `VariableExpense` |
-  `Savings`), the ledger of actual income/spend entries.
+  `activationToken`, `resetPasswordToken`), plus `isGoogleAccount` for OAuth users, plus budget
+  settings: `payFrequency` (`Biweekly` | `Monthly`) and `needsPercent`/`wantsPercent`/
+  `savingsPercent` (must sum to 1, enforced in `UserService.updateProfile`).
+- `Salary` (an income entry — despite the name, also used for one-off extra income) has a real
+  `date` (the day it landed) and a `type` (`Payroll` | `Extra`). There is **no stored `Period`
+  model** — periods are computed on the fly from `Payroll`-type `Salary.date`s, see
+  `module/periods/period.util.ts`. `Distribution` (the old per-salary fixed/variable/savings
+  breakdown) was removed along with the `Mes` enum — distribution is now computed per period, not
+  stored per income entry.
+- `Transaction` — `category` is the fixed `BudgetCategory` enum (`Necesidad` | `Deseo` |
+  `Ahorro`, spec §4), not free text. `periodOverride` (`Previous` | `Current`, nullable) lets a
+  transaction be manually pinned to a period other than the one its `date` would naturally
+  resolve to (spec §3.4's "override manual").
 - `FixedExpense` — recurring expense records (one-to-one with `User` currently, `@unique` on
-  `userId`), separate from `Transaction`.
-- `Mes` enum uses Spanish month names — a domain-language choice, keep it consistent if extending.
+  `userId`), separate from `Transaction`. Not touched by the periods work; still only supports
+  one row per user.
 
 ### Modules (`src/module/`)
 
@@ -71,24 +79,34 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
   API-key/service-to-service auth strategy anymore (the old `ApiKeyStrategy` decoded JWTs without
   verifying their signature — a real auth bypass — and was removed); `role-auth.guard.ts` was
   also removed as dead code (it referenced a `role` field that doesn't exist on `User`).
-- **salary** — implements budget distribution with the **Strategy pattern**
-  (`strategies/salary-distribution.strategy.ts` interface, `fifty-thirty-twenty.strategy.ts` and
-  `custom.strategy.ts` implementations). `SalaryService.setStrategy(...)` is called per-request
-  from the controller before distributing; both `POST /salary` and `GET /salary/details` are
-  `JwtAuthGuard`-protected and always operate on `req.user.userId` (never a client-supplied
-  `userId`, which used to be an IDOR). `CustomStrategy` is still unused/dead — no endpoint lets a
-  user pick their own percentages yet, and nothing persists a chosen split; wiring that up is
-  part of the not-yet-started "core" work (see below), not a bug fix. Note: this module currently
-  mixes two structures — an older `entities/` + `dto/` pair alongside a newer `domain/dto/` +
-  `domain/salary.entity.ts` layout; `domain/dto/create-salary.dto copy.ts` is a stray duplicate
-  filename actually imported by the controller — check which DTO/entity a change should touch
-  before adding to either.
+- **salary** (income) — `POST /salary` (create), `PATCH /salary/:id` (edit date/amount/type,
+  ownership-checked), `GET /salary/details` (current calendar-month view, spec §3.3), `GET
+  /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
+  Distribution uses the **Strategy pattern** (`strategies/salary-distribution.strategy.ts`
+  interface, `custom.strategy.ts` the only implementation now — `fifty-thirty-twenty.strategy.ts`
+  was removed as redundant once `CustomStrategy` is always built from the user's own
+  `needsPercent`/`wantsPercent`/`savingsPercent`). `SalaryService` no longer holds strategy as
+  instance state (that was a request-concurrency hazard on a singleton provider) — callers pass
+  the strategy into `distributeSalaryPreview(amount, strategy)` directly.
+- **periods** (`src/module/periods/`) — the spec's core feature: budget periods anchored to real
+  paycheck dates instead of the calendar. **No `Period` table** — `period.util.ts` computes
+  period boundaries on the fly from a user's `Payroll`-type `Salary` dates
+  (`computePeriods`/`resolvePeriodForDate`/`resolveTransactionPeriod`/`estimateNextPaymentDate`,
+  all pure functions, unit-tested in `period.util.spec.ts`). Because nothing is stored,
+  editing/adding a payroll date automatically "moves" transactions between periods on the next
+  read — there's no explicit reassignment code anywhere. `PeriodsService.getCurrentPeriodSummary`
+  /`listPeriods` fetch a user's `Salary`+`Transaction` rows once and aggregate income/spend/budget
+  per period via `CustomStrategy`. `GET /periods/current` and `GET /periods` expose this.
+  **Timezone note:** all date math here uses hand-rolled UTC helpers, not `date-fns`'s
+  `startOfDay`/`addDays`/`addMonths` — those operate in the process's local timezone, which would
+  make period boundaries depend on server TZ. Don't reintroduce plain date-fns calls into this
+  file for date-only (no time-of-day) arithmetic.
 - **transactions** — real CRUD: `TransactionsController` (`JwtAuthGuard` on the whole
   controller) exposes `POST/GET /transactions` and `PATCH/DELETE /transactions/:id`, backed by
   `TransactionsRepository` (Prisma) and `TransactionsService`. Every read/write is scoped to
   `req.user.userId`; `update`/`remove` look the row up by `(id, userId)` first and throw
   `NotFoundException` if it isn't the caller's, so one user can never touch another's rows.
-- **user** — user CRUD/service backing auth (registration, profile).
+- **user** — user CRUD/service backing auth (registration, profile, budget settings).
 - **mail** — `@nestjs-modules/mailer` + `hbs` templates (`module/mail/templates`) for
   activation and password-reset emails; the reset link points at the separate
   `prosper-change-password` app via `API_BASE_URL_RESET`.
@@ -97,16 +115,19 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
 
 ### Product spec vs. current implementation
 
-See `../docs/spec.md` (and the "Gap vs. current code" section in the workspace root
-`CLAUDE.md`) before changing anything in `salary`/`transactions`. Auth, salary's IDOR, and
-transactions CRUD have since been closed out — what's still genuinely missing (this is the next,
-not-yet-started phase): the spec's core feature — budget periods anchored to real paycheck dates
-instead of calendar months — `Salary` is still calendar-month/year only; per-user configurable
-percentages aren't wired up (`CustomStrategy` is unused/no persistence); categories are
-free-text, not the spec's fixed Necesidades/Deseos/Ahorro set; `FixedExpense.userId` is
-`@unique`, so only one fixed expense per user can exist; there is no email-ingestion or
-push-notification code anywhere in this repo. Confirm with the co-founder before building any of
-this — treat it as the next planned phase, not something to start opportunistically.
+See `../docs/spec.md`. Auth, the salary/profile IDORs, transactions CRUD, dynamic periods
+(spec §3) and configurable budget percentages (spec §4) are now implemented — see `periods` and
+`salary` above. What's still genuinely missing:
+- `FixedExpense.userId` is `@unique`, so only one fixed expense per user can exist — unrelated to
+  the periods work, not touched.
+- No email-ingestion module (bank notification parsing, dedupe, pending-confirmation state).
+- No push notification implementation anywhere in either repo.
+- Frontend does not yet consume `/periods/*` or the new `/salary`/`/transactions` shapes
+  (category enum, `date`/`type` on income) — it was intentionally left on the old contract for
+  this pass; wiring Entries/Expenditures/Dashboard/Settings to the new backend is the next phase.
+
+Confirm with the co-founder before building any of the still-missing items — treat them as
+separate planned phases, not something to start opportunistically.
 
 ### Config
 

@@ -28,31 +28,45 @@ model User {
   lastName           String?        @map("last_name")
   firstName          String?        @map("first_name")
   resetPasswordToken String?        @map("reset_password_token")
+  payFrequency       PayFrequency   @default(Biweekly) @map("pay_frequency")
+  needsPercent       Float          @default(0.5) @map("needs_percent")
+  wantsPercent       Float          @default(0.3) @map("wants_percent")
+  savingsPercent     Float          @default(0.2) @map("savings_percent")
 
   @@index([username, email], name: "user_search_idx")
   @@map("users")
 }
 
+enum PayFrequency {
+  Biweekly
+  Monthly
+}
+
 model Transaction {
-  id          Int             @id @default(autoincrement())
-  userId      Int             @map("user_id")
-  user        User            @relation(fields: [userId], references: [id])
-  amount      Float
-  date        DateTime
-  category    String
-  description String?
-  type        TransactionType
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  id             Int             @id @default(autoincrement())
+  userId         Int             @map("user_id")
+  user           User            @relation(fields: [userId], references: [id])
+  amount         Float
+  date           DateTime
+  category       BudgetCategory
+  description    String?
+  periodOverride PeriodOverride? @map("period_override")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
   @@map("transactions")
 }
 
-enum TransactionType {
-  FixedExpense
-  VariableExpense
-  Savings
+enum BudgetCategory {
+  Necesidad
+  Deseo
+  Ahorro
+}
+
+enum PeriodOverride {
+  Previous
+  Current
 }
 
 model FixedExpense {
@@ -71,46 +85,21 @@ model FixedExpense {
   @@map("fixed_expenses")
 }
 
-enum Mes {
-  Enero
-  Febrero
-  Marzo
-  Abril
-  Mayo
-  Junio
-  Julio
-  Agosto
-  Septiembre
-  Octubre
-  Noviembre
-  Diciembre
-}
-
 model Salary {
-  id           Int           @id @default(autoincrement())
-  userId       Int           @map("user_id")
-  user         User          @relation(fields: [userId], references: [id])
-  amount       Float
-  month        Mes
-  year         Int
-  distribution Distribution?
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  id        Int        @id @default(autoincrement())
+  userId    Int        @map("user_id")
+  user      User       @relation(fields: [userId], references: [id])
+  amount    Float
+  date      DateTime
+  type      IncomeType @default(Payroll)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
-  @@index([month, year], name: "salary_month_year_idx")
+  @@index([userId, date], name: "salary_user_date_idx")
   @@map("salaries")
 }
 
-model Distribution {
-  id               Int      @id @default(autoincrement())
-  salaryId         Int      @unique() @map("salary_id")
-  salary           Salary   @relation(fields: [salaryId], references: [id])
-  fixedExpenses    Float    @map("fixed_expenses")
-  variableExpenses Float    @map("variable_expenses")
-  savings          Float
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  @@index([fixedExpenses, variableExpenses, savings], name: "distribution_idx")
-  @@map("distributions")
+enum IncomeType {
+  Payroll
+  Extra
 }

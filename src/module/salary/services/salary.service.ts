@@ -1,24 +1,20 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SalaryRepository } from '../repositories/salary.repository';
-import { CreateAmountDto } from '../domain/dto/create-amount.dto';
+import { CreateSalaryDto } from '../domain/dto/create-salary.dto';
+import { UpdateSalaryDto } from '../domain/dto/update-salary.dto';
 import { SalaryDistributionStrategy } from '../strategies/salary-distribution.strategy';
 
 @Injectable()
 export class SalaryService {
-  private strategy: SalaryDistributionStrategy;
-
   constructor(private readonly salaryRepository: SalaryRepository) {}
 
-  setStrategy(strategy: SalaryDistributionStrategy) {
-    this.strategy = strategy;
-  }
-
-  async createSalary(userId: number, amount: number) {
+  async create(userId: number, createSalaryDto: CreateSalaryDto) {
     try {
-      if (!this.strategy) {
-        throw new Error('Strategy not set');
-      }
-      await this.salaryRepository.createSalary(userId, amount, this.strategy);
+      await this.salaryRepository.create(userId, createSalaryDto);
       return { message: 'Salario creado exitosamente' };
     } catch (error) {
       console.log(error);
@@ -26,12 +22,31 @@ export class SalaryService {
     }
   }
 
-  async distributeSalaryPrevious({ amount }: CreateAmountDto) {
+  findAllForUser(userId: number) {
+    return this.salaryRepository.findManyByUser(userId);
+  }
+
+  private async findOwnedOrThrow(id: number, userId: number) {
+    const salary = await this.salaryRepository.findOneOwned(id, userId);
+
+    if (!salary) {
+      throw new NotFoundException('Salary not found');
+    }
+
+    return salary;
+  }
+
+  async update(id: number, userId: number, updateSalaryDto: UpdateSalaryDto) {
+    await this.findOwnedOrThrow(id, userId);
+    return this.salaryRepository.update(id, updateSalaryDto);
+  }
+
+  distributeSalaryPreview(
+    amount: number,
+    strategy: SalaryDistributionStrategy,
+  ) {
     try {
-      if (!this.strategy) {
-        throw new Error('Strategy not set');
-      }
-      const distribution = this.strategy.distributeSalary(amount);
+      const distribution = strategy.distributeSalary(amount);
       return {
         message: 'Aquí está la previsualización de la distribución del salario',
         distribution,
