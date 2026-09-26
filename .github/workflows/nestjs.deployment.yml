@@ -74,6 +74,15 @@ jobs:
       - name: Pull latest image
         run: docker compose --env-file ~/secrets/prospero-backend.env pull
 
+      - name: Run Prisma migrations
+        # prisma is a devDependency, so it's not in the production image's
+        # node_modules — npx fetches it fresh. Keep this version pin in
+        # sync with package.json's "prisma"/"@prisma/client" version to
+        # avoid a CLI/client mismatch.
+        run: |
+          docker run --rm --env-file ~/secrets/prospero-backend.env --network prospero \
+            ${{ env.IMAGE }}:latest npx --yes prisma@5.16.1 migrate deploy
+
       - name: Stop existing container
         run: docker compose --env-file ~/secrets/prospero-backend.env down
 
