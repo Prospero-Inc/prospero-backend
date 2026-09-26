@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { differenceInCalendarDays } from 'date-fns';
-import {
-  BudgetCategory,
-  IncomeType,
-  Salary,
-  Transaction,
-} from '@prisma/client';
+import { IncomeType, Salary, Transaction } from '@prisma/client';
 import { UserService } from '../user/user.service';
 import { SalaryService } from '../salary/services/salary.service';
 import { TransactionsService } from '../transactions/services/transactions.service';
@@ -17,15 +12,10 @@ import {
   resolvePeriodForDate,
   resolveTransactionPeriod,
 } from './period.util';
-
-const CATEGORY_TO_BUDGET_KEY: Record<
-  BudgetCategory,
-  'necesidad' | 'deseo' | 'ahorro'
-> = {
-  [BudgetCategory.Necesidad]: 'necesidad',
-  [BudgetCategory.Deseo]: 'deseo',
-  [BudgetCategory.Ahorro]: 'ahorro',
-};
+import {
+  CATEGORY_TO_BUDGET_KEY,
+  distributeIncomeByCategory,
+} from './income-distribution.util';
 
 export interface PeriodSummary {
   startDate: Date | null;
@@ -101,7 +91,12 @@ export class PeriodsService {
       0,
     );
 
-    const budgeted = strategy.distributeSalary(income);
+    // Extra income earmarked to a single budget category (budgetCategory set,
+    // distributeAutomatically left false) is assigned 100% to that category
+    // instead of going through the percentage split; everything else
+    // (all Payroll, plus non-earmarked Extra) is distributed by `strategy`
+    // exactly like before this existed. See income-distribution.util.ts.
+    const budgeted = distributeIncomeByCategory(periodIncomes, strategy);
     const spentByCategory = periodTransactions.reduce(
       (acc, transaction) => {
         const key = CATEGORY_TO_BUDGET_KEY[transaction.category];

@@ -15,6 +15,8 @@ export class SalaryRepository {
         amount: data.amount,
         date: data.date,
         type: data.type,
+        budgetCategory: data.budgetCategory,
+        distributeAutomatically: data.distributeAutomatically,
       },
     });
   }
@@ -56,6 +58,8 @@ export class SalaryRepository {
             amount: true,
             date: true,
             type: true,
+            budgetCategory: true,
+            distributeAutomatically: true,
           },
           orderBy: { date: 'asc' },
         },

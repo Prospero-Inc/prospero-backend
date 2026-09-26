@@ -90,14 +90,16 @@ model FixedExpense {
 }
 
 model Salary {
-  id        Int        @id @default(autoincrement())
-  userId    Int        @map("user_id")
-  user      User       @relation(fields: [userId], references: [id])
-  amount    Float
-  date      DateTime
-  type      IncomeType @default(Payroll)
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  id                      Int             @id @default(autoincrement())
+  userId                  Int             @map("user_id")
+  user                    User            @relation(fields: [userId], references: [id])
+  amount                  Float
+  date                    DateTime
+  type                    IncomeType      @default(Payroll)
+  budgetCategory          BudgetCategory? @map("budget_category")
+  distributeAutomatically Boolean         @default(false) @map("distribute_automatically")
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
 
   @@index([userId, date], name: "salary_user_date_idx")
   @@map("salaries")
