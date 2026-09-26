@@ -81,4 +81,4 @@ jobs:
         run: docker compose --env-file ~/secrets/prospero-backend.env up -d
 
       - name: Clean up old images
-        run: docker image prune -f
+        run: docker image prune -a -f
