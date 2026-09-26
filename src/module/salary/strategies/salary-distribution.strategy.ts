@@ -1,7 +1,7 @@
 export interface SalaryDistributionStrategy {
   distributeSalary(amount: number): {
-    fixedExpenses: number;
-    variableExpenses: number;
-    savings: number;
+    necesidad: number;
+    deseo: number;
+    ahorro: number;
   };
 }

@@ -4,14 +4,28 @@ services:
   prospero:
     container_name: prospero-service
     init: true
-    environment:
-      - DOPPLER_TOKEN=${DOPPLER_TOKEN_API}
     image: prospero-service
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: ${API_BASE_URL}
+      API_BASE_URL_RESET: ${API_BASE_URL_RESET}
+      DATABASE_URL: ${DATABASE_URL}
+      DIRECT_URL: ${DIRECT_URL}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_SERVICE: ${MAIL_SERVICE}
+      MAIL_USER: ${MAIL_USER}
+      SECRET: ${SECRET}
     ports:
       - '3000:3000'
-    volumes:
-      - ./src:/app/src
-  
+    networks:
+      - prospero
+
+networks:
+  prospero:
+    external: true

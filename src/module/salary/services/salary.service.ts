@@ -1,50 +1,89 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { IncomeType } from '@prisma/client';
 import { SalaryRepository } from '../repositories/salary.repository';
-import { CreateAmountDto } from '../domain/dto/create-amount.dto';
+import { CreateSalaryDto } from '../domain/dto/create-salary.dto';
+import { UpdateSalaryDto } from '../domain/dto/update-salary.dto';
 import { SalaryDistributionStrategy } from '../strategies/salary-distribution.strategy';
 
 @Injectable()
 export class SalaryService {
-  private strategy: SalaryDistributionStrategy;
-
   constructor(private readonly salaryRepository: SalaryRepository) {}
 
-  setStrategy(strategy: SalaryDistributionStrategy) {
-    this.strategy = strategy;
-  }
+  /**
+   * `budgetCategory`/`distributeAutomatically` only make sense for `Extra`
+   * income (see periods.service.ts's earmarking logic): a `Payroll` entry is
+   * always fully distributed by the user's percentage split, so allowing
+   * those fields on a Payroll row would silently be a no-op and could mask a
+   * frontend bug. We reject the request explicitly instead of ignoring the
+   * fields, so callers get immediate feedback rather than surprising
+   * behavior.
+   */
+  private assertBudgetFieldsAllowedForType(
+    type: IncomeType,
+    dto: Pick<CreateSalaryDto, 'budgetCategory' | 'distributeAutomatically'>,
+  ) {
+    const hasBudgetFields =
+      dto.budgetCategory !== undefined ||
+      dto.distributeAutomatically !== undefined;
 
-  async distributeSalary(userId: number, amount: CreateAmountDto) {
-    try {
-      if (!this.strategy) {
-        throw new Error('Strategy not set');
-      }
-      await await this.salaryRepository.distributeSalary(
-        userId,
-        amount,
-        this.strategy,
+    if (type === IncomeType.Payroll && hasBudgetFields) {
+      throw new BadRequestException(
+        'budgetCategory y distributeAutomatically solo aplican a ingresos de tipo Extra',
       );
-
-      return { message: 'Salario distribuido exitosamente' };
-    } catch (error) {
-      throw new InternalServerErrorException('Error al distribuir el salario');
     }
   }
 
-  async createSalary(userId: number, amount: number) {
+  async create(userId: number, createSalaryDto: CreateSalaryDto) {
+    this.assertBudgetFieldsAllowedForType(
+      createSalaryDto.type ?? IncomeType.Payroll,
+      createSalaryDto,
+    );
+
     try {
-      await this.salaryRepository.createSalary(userId, amount);
+      await this.salaryRepository.create(userId, createSalaryDto);
       return { message: 'Salario creado exitosamente' };
     } catch (error) {
+      console.log(error);
       throw new InternalServerErrorException('Error al crear el salario');
     }
   }
 
-  async distributeSalaryPrevious({ amount }: CreateAmountDto) {
+  findAllForUser(userId: number) {
+    return this.salaryRepository.findManyByUser(userId);
+  }
+
+  private async findOwnedOrThrow(id: number, userId: number) {
+    const salary = await this.salaryRepository.findOneOwned(id, userId);
+
+    if (!salary) {
+      throw new NotFoundException('Salary not found');
+    }
+
+    return salary;
+  }
+
+  async update(id: number, userId: number, updateSalaryDto: UpdateSalaryDto) {
+    const existing = await this.findOwnedOrThrow(id, userId);
+
+    this.assertBudgetFieldsAllowedForType(
+      updateSalaryDto.type ?? existing.type,
+      updateSalaryDto,
+    );
+
+    return this.salaryRepository.update(id, updateSalaryDto);
+  }
+
+  distributeSalaryPreview(
+    amount: number,
+    strategy: SalaryDistributionStrategy,
+  ) {
     try {
-      if (!this.strategy) {
-        throw new Error('Strategy not set');
-      }
-      const distribution = this.strategy.distributeSalary(amount);
+      const distribution = strategy.distributeSalary(amount);
       return {
         message: 'Aquí está la previsualización de la distribución del salario',
         distribution,

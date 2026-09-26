@@ -1,20 +1,17 @@
 import { SalaryDistributionStrategy } from './salary-distribution.strategy';
 
 export class CustomStrategy implements SalaryDistributionStrategy {
-  private fixedPercentage: number;
-  private variablePercentage: number;
-  private savingsPercentage: number;
-
-  constructor(fixed: number, variable: number, savings: number) {
-    this.fixedPercentage = fixed;
-    this.variablePercentage = variable;
-    this.savingsPercentage = savings;
-  }
+  constructor(
+    private readonly needsPercent: number,
+    private readonly wantsPercent: number,
+    private readonly savingsPercent: number,
+  ) {}
 
   distributeSalary(amount: number) {
-    const fixedExpenses = amount * this.fixedPercentage;
-    const variableExpenses = amount * this.variablePercentage;
-    const savings = amount * this.savingsPercentage;
-    return { fixedExpenses, variableExpenses, savings };
+    return {
+      necesidad: amount * this.needsPercent,
+      deseo: amount * this.wantsPercent,
+      ahorro: amount * this.savingsPercent,
+    };
   }
 }

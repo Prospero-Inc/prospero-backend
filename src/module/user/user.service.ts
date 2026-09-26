@@ -1,7 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { User } from '@prisma/client';
 import { CreateUserDTO } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { v4 as uuid4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
@@ -48,7 +53,7 @@ export class UserService {
     }
   }
 
-  async updateSecretKey(id: number, secret: string) {
+  async updateSecretKey(id: number, secret: string, qr: string) {
     return await this.prisma.user.update({
       where: {
         id,
@@ -56,6 +61,7 @@ export class UserService {
       data: {
         twoFASecret: secret,
         enable2FA: true,
+        qr2FA: qr,
       },
     });
   }
@@ -102,29 +108,75 @@ export class UserService {
     };
   }
 
-  async findByApiKey(email: string) {
+  async findProfileById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: {
-        email,
+        id,
       },
       select: {
         id: true,
         username: true,
         isActive: true,
         isGoogleAccount: true,
-        activationToken: true,
         enable2FA: true,
-        twoFASecret: true,
         email: true,
         lastName: true,
         firstName: true,
+        createdAt: true,
+        payFrequency: true,
+        needsPercent: true,
+        wantsPercent: true,
+        savingsPercent: true,
       },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Could not find user 3');
+      throw new UnauthorizedException('Could not find user');
     }
     return user;
+  }
+
+  async updateProfile(id: number, data: UpdateUserDto) {
+    const { needsPercent, wantsPercent, savingsPercent } = data;
+    const percentagesProvided = [needsPercent, wantsPercent, savingsPercent];
+    if (percentagesProvided.some((value) => value !== undefined)) {
+      if (percentagesProvided.some((value) => value === undefined)) {
+        throw new BadRequestException(
+          'needsPercent, wantsPercent and savingsPercent must be provided together',
+        );
+      }
+      const sum = needsPercent + wantsPercent + savingsPercent;
+      if (Math.abs(sum - 1) > 0.001) {
+        throw new BadRequestException(
+          'needsPercent + wantsPercent + savingsPercent must add up to 1',
+        );
+      }
+    }
+
+    try {
+      return await this.prisma.user.update({
+        where: {
+          id,
+        },
+        data,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          payFrequency: true,
+          needsPercent: true,
+          wantsPercent: true,
+          savingsPercent: true,
+        },
+      });
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new UnauthorizedException('Username already exists');
+      }
+      throw error;
+    }
   }
 
   async findOneInactiveByIdActivationToken(

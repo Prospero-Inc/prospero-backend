@@ -12,10 +12,10 @@ import {
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
 import { CreateUserDTO } from '../user/dto/create-user.dto';
+import { UpdateUserDto } from '../user/dto/update-user.dto';
 import { LoginDTO } from '../user/dto/login.dto';
 import { JwtAuthGuard } from './jwt-guard';
 import { Enable2FAType } from './types';
-import { AuthGuard } from '@nestjs/passport';
 import { ValidateTokenDTO } from './dto/validate-token.dto';
 import {
   ApiTags,
@@ -23,7 +23,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { ActivateUserDto } from './dto';
+import { Throttle } from '@nestjs/throttler';
+import { ActivateUserDto, VerifyLoginTwoFactorDto } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { validate } from 'class-validator';
@@ -37,6 +38,7 @@ export class AuthController {
   ) {}
 
   @Post('signup')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
   @ApiResponse({
     status: 201,
@@ -48,6 +50,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Iniciar sesión con un usuario registrado' })
   @ApiResponse({ status: 200, description: 'Inicio de sesión exitoso.' })
   @ApiResponse({ status: 401, description: 'Credenciales incorrectas.' })
@@ -55,8 +58,26 @@ export class AuthController {
     return await this.authService.login(loginDTO);
   }
 
+  @Post('login/verify-2fa')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Verificar el código 2FA durante el login y obtener el acceso',
+  })
+  @ApiResponse({ status: 200, description: 'Login completado con éxito.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Token de pre-autenticación o código incorrecto.',
+  })
+  async verifyLoginTwoFactor(@Body() dto: VerifyLoginTwoFactorDto) {
+    return await this.authService.verifyLoginTwoFactor(
+      dto.preAuthToken,
+      dto.token,
+    );
+  }
+
   @Get('enable-2fa')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Habilitar autenticación de dos factores (2FA)' })
   @ApiResponse({ status: 200, description: '2FA habilitado con éxito.' })
@@ -67,6 +88,7 @@ export class AuthController {
 
   @Post('validate-2fa')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Validar el token de 2FA' })
   @ApiResponse({ status: 200, description: 'Token de 2FA validado con éxito.' })
@@ -86,6 +108,7 @@ export class AuthController {
 
   @Get('disable-2fa')
   @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Deshabilitar autenticación de dos factores (2FA)' })
   @ApiResponse({ status: 200, description: '2FA deshabilitado con éxito.' })
@@ -96,15 +119,27 @@ export class AuthController {
 
   @Get('profile')
   @ApiBearerAuth()
-  @UseGuards(AuthGuard('bearer'))
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Obtener el perfil del usuario autenticado' })
   @ApiResponse({ status: 200, description: 'Perfil del usuario autenticado.' })
   @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
-  getProfile(@Request() req) {
+  async getProfile(@Request() req) {
+    const user = await this.usersService.findProfileById(req.user.userId);
     return {
       msg: 'Profile of authenticated user',
-      user: req.user,
+      user,
     };
+  }
+
+  @Patch('profile')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Actualizar el perfil del usuario autenticado' })
+  @ApiResponse({ status: 200, description: 'Perfil actualizado con éxito.' })
+  @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
+  async updateProfile(@Request() req, @Body() dto: UpdateUserDto) {
+    return await this.usersService.updateProfile(req.user.userId, dto);
   }
 
   @Get('/activate-account')
@@ -116,6 +151,7 @@ export class AuthController {
   }
 
   @Patch('/request-reset-password')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({ summary: 'Restablecer la contraseña de un usuario' })
   @ApiResponse({
     status: 200,
@@ -129,6 +165,7 @@ export class AuthController {
   }
 
   @Post('/reset-password/:token')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resetPassword(
     @Param('token') token: string,
     @Body()

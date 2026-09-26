@@ -1,41 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNumber, ValidateNested, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IncomeType } from '@prisma/client';
 
-class DistributionDto {
-  @ApiProperty({ example: 300, description: 'Gastos fijos' })
-  @IsNumber()
-  fixedExpenses: number;
-
-  @ApiProperty({ example: 200, description: 'Gastos variables' })
-  @IsNumber()
-  variableExpenses: number;
-
-  @ApiProperty({ example: 100, description: 'Ahorros' })
-  @IsNumber()
-  savings: number;
-}
-
-class SalaryDto {
-  @ApiProperty({ example: 1000, description: 'Monto del salario' })
+class SalaryEntryDto {
+  @ApiProperty({ example: 1000, description: 'Monto del ingreso' })
   @IsNumber()
   amount: number;
 
-  @ApiProperty({ example: 'January', description: 'Mes del salario' })
-  @IsString()
-  month: string;
+  @ApiProperty({ example: '2026-09-15', description: 'Fecha del ingreso' })
+  date: Date;
 
-  @ApiProperty({ example: 2024, description: 'Año del salario' })
-  @IsNumber()
-  year: number;
-
-  @ApiProperty({
-    type: DistributionDto,
-    description: 'Distribución del salario',
-  })
-  @ValidateNested()
-  @Type(() => DistributionDto)
-  distribution: DistributionDto;
+  @ApiProperty({ enum: IncomeType, description: 'Tipo de ingreso' })
+  type: IncomeType;
 }
 
 export class SalaryDetailsDto {
@@ -44,23 +21,11 @@ export class SalaryDetailsDto {
   username: string;
 
   @ApiProperty({
-    type: [SalaryDto],
-    description: 'Detalles del salario',
-    example: [
-      {
-        amount: 1000,
-        month: 'January',
-        year: 2024,
-        distribution: {
-          fixedExpenses: 300,
-          variableExpenses: 200,
-          savings: 100,
-        },
-      },
-    ],
+    type: [SalaryEntryDto],
+    description: 'Ingresos del mes calendario actual',
   })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => SalaryDto)
-  salary: SalaryDto[];
+  @Type(() => SalaryEntryDto)
+  salary: SalaryEntryDto[];
 }

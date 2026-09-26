@@ -16,100 +16,96 @@ model User {
   activationToken    String?        @unique @map("activation_token")
   transactions       Transaction[]
   fixedExpenses      FixedExpense[]
-  salary             Salary?
+  salary             Salary[]
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
   apiKey             String?        @unique @map("api_key")
   enable2FA          Boolean        @default(false) @map("enable_2fa")
   twoFASecret        String?        @map("2fa_secret")
+  qr2FA              String?        @map("qr_2fa")
   password           String?
   email              String         @unique
   lastName           String?        @map("last_name")
   firstName          String?        @map("first_name")
   resetPasswordToken String?        @map("reset_password_token")
+  payFrequency       PayFrequency   @default(Biweekly) @map("pay_frequency")
+  needsPercent       Float          @default(0.5) @map("needs_percent")
+  wantsPercent       Float          @default(0.3) @map("wants_percent")
+  savingsPercent     Float          @default(0.2) @map("savings_percent")
 
   @@index([username, email], name: "user_search_idx")
   @@map("users")
 }
 
+enum PayFrequency {
+  Biweekly
+  Monthly
+}
+
 model Transaction {
-  id          Int             @id @default(autoincrement())
-  userId      Int             @unique @map("user_id")
-  user        User            @relation(fields: [userId], references: [id])
-  amount      Float
-  date        DateTime
-  category    String
-  description String?
-  type        TransactionType
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  id             Int             @id @default(autoincrement())
+  userId         Int             @map("user_id")
+  user           User            @relation(fields: [userId], references: [id])
+  amount         Float
+  date           DateTime
+  category       BudgetCategory
+  description    String?
+  periodOverride PeriodOverride? @map("period_override")
+  fixedExpenseId Int?            @map("fixed_expense_id")
+  fixedExpense   FixedExpense?   @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
   @@map("transactions")
 }
 
-enum TransactionType {
-  FixedExpense
-  VariableExpense
-  Savings
+enum BudgetCategory {
+  Necesidad
+  Deseo
+  Ahorro
+}
+
+enum PeriodOverride {
+  Previous
+  Current
 }
 
 model FixedExpense {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @unique @map("user_id")
-  user        User     @relation(fields: [userId], references: [id])
-  amount      Float
-  category    String
-  dueDate     DateTime @map("due_date")
-  reminder    Boolean
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id             Int            @id @default(autoincrement())
+  userId         Int            @map("user_id")
+  user           User           @relation(fields: [userId], references: [id])
+  amount         Float
+  name           String
+  budgetCategory BudgetCategory @map("budget_category")
+  dueDate        DateTime       @map("due_date")
+  reminder       Boolean
+  description    String?
+  transactions   Transaction[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  @@index([dueDate, category], name: "fixed_expense_due_date_category_idx")
+  @@index([userId, dueDate], name: "fixed_expense_user_due_date_idx")
   @@map("fixed_expenses")
 }
 
-enum Mes {
-  Enero
-  Febrero
-  Marzo
-  Abril
-  Mayo
-  Junio
-  Julio
-  Agosto
-  Septiembre
-  Octubre
-  Noviembre
-  Diciembre
-}
-
 model Salary {
-  id           Int           @id @default(autoincrement())
-  userId       Int           @unique @map("user_id")
-  user         User          @relation(fields: [userId], references: [id])
-  amount       Float
-  month        Mes
-  year         Int
-  distribution Distribution?
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  id                      Int             @id @default(autoincrement())
+  userId                  Int             @map("user_id")
+  user                    User            @relation(fields: [userId], references: [id])
+  amount                  Float
+  date                    DateTime
+  type                    IncomeType      @default(Payroll)
+  budgetCategory          BudgetCategory? @map("budget_category")
+  distributeAutomatically Boolean         @default(false) @map("distribute_automatically")
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
 
-  @@index([month, year], name: "salary_month_year_idx")
+  @@index([userId, date], name: "salary_user_date_idx")
   @@map("salaries")
 }
 
-model Distribution {
-  id               Int      @id @default(autoincrement())
-  salaryId         Int      @unique() @map("salary_id")
-  salary           Salary   @relation(fields: [salaryId], references: [id])
-  fixedExpenses    Float    @map("fixed_expenses")
-  variableExpenses Float    @map("variable_expenses")
-  savings          Float
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  @@index([fixedExpenses, variableExpenses, savings], name: "distribution_idx")
-  @@map("distributions")
+enum IncomeType {
+  Payroll
+  Extra
 }

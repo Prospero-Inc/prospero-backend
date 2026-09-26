@@ -1,9 +1,22 @@
-import { Body, Controller, Post, Query, Get, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { SalaryService } from '../services/salary.service';
 import { CreateAmountDto } from '../domain/dto/create-amount.dto';
-import { FiftyThirtyTwentyStrategy } from '../strategies/fifty-thirty-twenty.strategy';
-import { CreateSalaryDto } from '../domain/dto/create-salary.dto copy';
+import { CreateSalaryDto } from '../domain/dto/create-salary.dto';
+import { UpdateSalaryDto } from '../domain/dto/update-salary.dto';
+import { CustomStrategy } from '../strategies/custom.strategy';
 import { JwtAuthGuard } from '../../auth/jwt-guard';
+import { UserService } from '../../user/user.service';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -17,35 +30,20 @@ import {
 import { SalaryDetailsDto } from '../dto/salary-details.dto';
 
 @ApiTags('salary')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard)
 @Controller('salary')
 export class SalaryController {
-  constructor(private readonly salaryService: SalaryService) {}
-
-  @Post('distribute/fifty-thirty-twenty')
-  @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Distribuir salario según la estrategia 50-30-20' })
-  @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
-  @ApiBody({
-    type: CreateAmountDto,
-    description: 'Detalles del monto a distribuir',
-  })
-  @ApiResponse({ status: 201, description: 'Salario distribuido exitosamente' })
-  @ApiResponse({ status: 500, description: 'Error al distribuir el salario' })
-  async distributeFiftyThirtyTwenty(
-    @Query('userId') userId: number,
-    @Body() createAmountDto: CreateAmountDto,
-  ) {
-    this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
-    return this.salaryService.distributeSalary(userId, createAmountDto);
-  }
+  constructor(
+    private readonly salaryService: SalaryService,
+    private readonly userService: UserService,
+  ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear un nuevo salario' })
-  @ApiQuery({ name: 'userId', type: Number, description: 'ID del usuario' })
+  @ApiOperation({ summary: 'Crear un nuevo ingreso' })
   @ApiBody({
     type: CreateSalaryDto,
-    description: 'Detalles del salario a crear',
+    description: 'Detalles del ingreso a crear',
   })
   @ApiResponse({
     status: 201,
@@ -61,17 +59,29 @@ export class SalaryController {
       example: { statusCode: 500, message: 'Error al crear el salario' },
     },
   })
-  async createSalary(
-    @Query('userId') userId: number,
-    @Body() createSalaryDto: CreateSalaryDto,
+  async createSalary(@Request() req, @Body() createSalaryDto: CreateSalaryDto) {
+    return this.salaryService.create(req.user.userId, createSalaryDto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Listar todos los ingresos del usuario' })
+  async findAll(@Request() req) {
+    const salaries = await this.salaryService.findAllForUser(req.user.userId);
+    return [...salaries].reverse();
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Editar un ingreso existente' })
+  @ApiResponse({ status: 200, description: 'Ingreso actualizado con éxito.' })
+  async updateSalary(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateSalaryDto: UpdateSalaryDto,
   ) {
-    const { amount } = createSalaryDto;
-    return this.salaryService.createSalary(+userId, amount);
+    return this.salaryService.update(id, req.user.userId, updateSalaryDto);
   }
 
   @Get('distribute/preview')
-  @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Previsualización de la distribución del salario',
   })
@@ -88,18 +98,24 @@ export class SalaryController {
     status: 500,
     description: 'Error al distribuir el salario',
   })
-  async distributeSalaryPreview(@Query() createAmountDto: CreateAmountDto) {
-    this.salaryService.setStrategy(new FiftyThirtyTwentyStrategy());
-    return this.salaryService.distributeSalaryPrevious(createAmountDto);
+  async distributeSalaryPreview(
+    @Request() req,
+    @Query() createAmountDto: CreateAmountDto,
+  ) {
+    const user = await this.userService.findById(req.user.userId);
+    const strategy = new CustomStrategy(
+      user.needsPercent,
+      user.wantsPercent,
+      user.savingsPercent,
+    );
+    return this.salaryService.distributeSalaryPreview(
+      createAmountDto.amount,
+      strategy,
+    );
   }
 
   @Get('details')
   @ApiOperation({ summary: 'Obtener detalles del salario del usuario' })
-  @ApiQuery({
-    name: 'userId',
-    type: Number,
-    description: 'ID del usuario para obtener detalles del salario',
-  })
   @ApiOkResponse({
     description: 'Detalles del salario obtenidos exitosamente',
     type: SalaryDetailsDto,
@@ -107,7 +123,7 @@ export class SalaryController {
   @ApiInternalServerErrorResponse({
     description: 'Error al obtener los detalles del salario',
   })
-  async getUserSalaryDetails(@Query('userId') userId: number) {
-    return this.salaryService.getUserSalaryDetails(+userId);
+  async getUserSalaryDetails(@Request() req) {
+    return this.salaryService.getUserSalaryDetails(req.user.userId);
   }
 }

@@ -7,3 +7,9 @@ export interface AccessTokenResponse {
     username: string;
   };
 }
+
+export interface RequiresTwoFactorResponse {
+  requires2FA: true;
+  preAuthToken: string;
+  message: string;
+}

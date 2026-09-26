@@ -32,6 +32,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^7.4.0",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.16.1",
     "@types/hbs": "^4.0.4",
     "bcrypt": "^5.1.1",
@@ -43,7 +44,6 @@
     "joi": "^17.13.3",
     "nestjs-i18n": "^10.4.5",
     "passport": "^0.6.0",
-    "passport-http-bearer": "^1.0.1",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
@@ -85,6 +85,9 @@
       "ts"
     ],
     "rootDir": "src",
+    "modulePaths": [
+      "<rootDir>/.."
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
