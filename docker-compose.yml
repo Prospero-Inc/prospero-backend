@@ -4,10 +4,7 @@ services:
   prospero:
     container_name: prospero-service
     init: true
-    image: prospero-service
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/prospero-inc/prospero-backend:latest
     environment:
       NODE_ENV: production
       API_BASE_URL: ${API_BASE_URL}
