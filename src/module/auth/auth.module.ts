@@ -6,6 +6,9 @@ import { JwtStrategy } from './jwt-strategy';
 import { UserModule } from '../user/user.module';
 import { MailModule } from '../mail/mail.module';
 import { NestI18nModule } from 'src/lib';
+import { PrismaService } from '../prisma.service';
+import { RefreshTokenRepository } from './repositories/refresh-token.repository';
+import { ACCESS_TOKEN_TTL } from './auth.constants';
 
 @Module({
   imports: [
@@ -15,12 +18,12 @@ import { NestI18nModule } from 'src/lib';
     JwtModule.register({
       secret: process.env.SECRET,
       signOptions: {
-        expiresIn: '1d',
+        expiresIn: ACCESS_TOKEN_TTL,
       },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, RefreshTokenRepository, PrismaService],
   exports: [AuthService],
 })
 export class AuthModule {}

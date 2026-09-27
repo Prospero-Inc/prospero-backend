@@ -77,17 +77,36 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
   disabled, or `{ requires2FA, preAuthToken }` (a short-lived 5-minute JWT with a `pending2FA`
   claim) when it's enabled; `POST /auth/login/verify-2fa` exchanges that pre-auth token + OTP for
   the real access token via `AuthService.verifyLoginTwoFactor`. TOTP 2FA itself uses `speakeasy`.
-  `GET`/`PATCH /auth/profile` use `JwtAuthGuard` + `UserService.findProfileById`/`updateProfile`
-  (a Prisma `select` allowlist keeps secrets like `password`/`twoFASecret` out of the response —
-  extend that `select`, don't just widen it, if the profile shape needs more fields). There is no
-  API-key/service-to-service auth strategy anymore (the old `ApiKeyStrategy` decoded JWTs without
-  verifying their signature — a real auth bypass — and was removed); `role-auth.guard.ts` was
-  also removed as dead code (it referenced a `role` field that doesn't exist on `User`).
-  App-wide rate limiting is `@nestjs/throttler`, wired as a global `APP_GUARD` in
-  `app.module.ts` (60 req/min/IP default). `signup`, `login`, `login/verify-2fa`,
+  Access + refresh tokens (design doc: `../docs/auth-refresh-tokens.md`): the signed JWT
+  `accessToken` (`{ email, userId }`, HS256 via `SECRET`) now expires in **15 minutes**
+  (`ACCESS_TOKEN_TTL`/`ACCESS_TOKEN_TTL_SECONDS` in `auth.constants.ts`, wired into
+  `AuthModule`'s `JwtModule.register`); `AccessTokenResponse` also returns
+  `accessTokenExpiresIn` (seconds) plus a `refreshToken` — a random opaque 256-bit value
+  (`crypto.randomBytes(32)`, **not** a JWT) good for **30 days**
+  (`REFRESH_TOKEN_TTL_DAYS`). Only its SHA-256 hash is persisted, via the `RefreshToken` Prisma
+  model + `RefreshTokenRepository` (`module/auth/repositories/`, following the same
+  repository-over-`PrismaService` pattern as `transactions`/`fixed-expenses`) — the raw value is
+  sent to the client once and never stored. `POST /auth/refresh` (`RefreshTokenDto`, no
+  `JwtAuthGuard` since the access token may already be expired) rotates on every call: it revokes
+  the presented refresh token (`revokedAt` + `replacedByTokenHash`) and issues a brand new
+  access+refresh pair, so the client must always persist the newest refresh token. Presenting a
+  refresh token that is already `revokedAt != null` is treated as reuse/theft and revokes *all* of
+  that user's refresh tokens before responding 401. `POST /auth/logout` (`LogoutDto`, also no
+  guard) revokes one token server-side and is idempotent (no error if it's unknown or already
+  revoked). `GET`/`PATCH /auth/profile` use `JwtAuthGuard` + `UserService.findProfileById`/
+  `updateProfile` (a Prisma `select` allowlist keeps secrets like `password`/`twoFASecret` out of
+  the response — extend that `select`, don't just widen it, if the profile shape needs more
+  fields). There is no API-key/service-to-service auth strategy anymore (the old `ApiKeyStrategy`
+  decoded JWTs without verifying their signature — a real auth bypass — and was removed);
+  `role-auth.guard.ts` was also removed as dead code (it referenced a `role` field that doesn't
+  exist on `User`). App-wide rate limiting is `@nestjs/throttler`, wired as a global `APP_GUARD`
+  in `app.module.ts` (60 req/min/IP default). `signup`, `login`, `login/verify-2fa`,
   `request-reset-password`, and `reset-password/:token` override it with tighter per-route
   `@Throttle()` limits (3–5 req/min) — those are the ones that either send a real email or are
   brute-force targets, which is what actually costs money/risks abuse on a small instance.
+  `POST /auth/refresh` gets a looser `@Throttle()` (10 req/min) since legitimate silent refreshes
+  from an active client are frequent. No cron/cleanup job exists yet for expired+revoked
+  `RefreshToken` rows (table grows unbounded — deferred until it's an actual size problem).
 - **salary** (income) — `POST /salary` (create), `PATCH /salary/:id` (edit date/amount/type,
   ownership-checked), `GET /salary/details` (current calendar-month view, spec §3.3), `GET
   /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.

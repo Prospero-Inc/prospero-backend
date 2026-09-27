@@ -8,6 +8,7 @@ import {
   Query,
   Patch,
   Param,
+  HttpCode,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -24,7 +25,12 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { ActivateUserDto, VerifyLoginTwoFactorDto } from './dto';
+import {
+  ActivateUserDto,
+  LogoutDto,
+  RefreshTokenDto,
+  VerifyLoginTwoFactorDto,
+} from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { validate } from 'class-validator';
@@ -73,6 +79,36 @@ export class AuthController {
       dto.preAuthToken,
       dto.token,
     );
+  }
+
+  @Post('refresh')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Intercambiar un refresh token vigente por un nuevo par access/refresh token (rotación)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Nuevo par de tokens generado con éxito.',
+  })
+  @ApiResponse({
+    status: 401,
+    description:
+      'Refresh token desconocido, expirado o ya revocado (posible reuso).',
+  })
+  async refresh(@Body() dto: RefreshTokenDto) {
+    return await this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Cerrar sesión revocando el refresh token en el servidor',
+  })
+  @ApiResponse({ status: 200, description: 'Sesión cerrada con éxito.' })
+  async logout(@Body() dto: LogoutDto) {
+    await this.authService.logout(dto.refreshToken);
+    return {};
   }
 
   @Get('enable-2fa')
