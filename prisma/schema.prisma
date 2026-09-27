@@ -17,6 +17,7 @@ model User {
   transactions       Transaction[]
   fixedExpenses      FixedExpense[]
   salary             Salary[]
+  refreshTokens      RefreshToken[]
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
   apiKey             String?        @unique @map("api_key")
@@ -108,4 +109,18 @@ model Salary {
 enum IncomeType {
   Payroll
   Extra
+}
+
+model RefreshToken {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @map("user_id")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash           String    @unique @map("token_hash")
+  expiresAt           DateTime  @map("expires_at")
+  revokedAt           DateTime? @map("revoked_at")
+  replacedByTokenHash String?   @map("replaced_by_token_hash")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }

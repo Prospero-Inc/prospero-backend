@@ -1,5 +1,7 @@
 export interface AccessTokenResponse {
   accessToken: string;
+  accessTokenExpiresIn: number;
+  refreshToken: string;
   user: {
     id: number;
     name: string;
