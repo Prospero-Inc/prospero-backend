@@ -8,6 +8,7 @@ import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDTO } from '../user/dto/login.dto';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
 import { ActivateUserDto } from './dto';
@@ -19,6 +20,11 @@ import { v4 as uuid4 } from 'uuid';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { translate } from 'src/lib/i18n';
 import { PayloadType } from './types';
+import { RefreshTokenRepository } from './repositories/refresh-token.repository';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_DAYS,
+} from './auth.constants';
 
 const PRE_AUTH_TOKEN_TTL = '5m';
 
@@ -28,6 +34,7 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly refreshTokenRepository: RefreshTokenRepository,
   ) {}
 
   async login(
@@ -102,11 +109,77 @@ export class AuthService {
     return this.buildAccessTokenResponse(user);
   }
 
-  private buildAccessTokenResponse(user: User): AccessTokenResponse {
+  /**
+   * Exchanges a valid, unrevoked refresh token for a brand new access + refresh
+   * token pair, revoking the presented one in the process (rotation).
+   *
+   * Reuse detection: a refresh token that is already `revokedAt != null` being
+   * presented again indicates a stolen/replayed token (a legitimate client always
+   * moves forward to the latest one) — the whole token family for that user is
+   * revoked as a security backstop before responding 401.
+   */
+  async refreshToken(rawRefreshToken: string): Promise<AccessTokenResponse> {
+    const tokenHash = this.hashToken(rawRefreshToken);
+    const storedToken =
+      await this.refreshTokenRepository.findByTokenHash(tokenHash);
+
+    if (!storedToken) {
+      throw new UnauthorizedException(
+        translate('exception.invalidRefreshToken'),
+      );
+    }
+
+    if (storedToken.revokedAt) {
+      await this.refreshTokenRepository.revokeAllForUser(storedToken.userId);
+      throw new UnauthorizedException(
+        translate('exception.invalidRefreshToken'),
+      );
+    }
+
+    if (storedToken.expiresAt < new Date()) {
+      throw new UnauthorizedException(
+        translate('exception.invalidRefreshToken'),
+      );
+    }
+
+    const user = await this.userService.findById(storedToken.userId);
+    const response = await this.buildAccessTokenResponse(user);
+
+    await this.refreshTokenRepository.revoke(
+      tokenHash,
+      this.hashToken(response.refreshToken),
+    );
+
+    return response;
+  }
+
+  /**
+   * Revokes the given refresh token server-side so "sign out" actually invalidates
+   * the session rather than just clearing client state. Idempotent: does nothing
+   * (and never throws) if the token is unknown or already revoked.
+   */
+  async logout(rawRefreshToken: string): Promise<void> {
+    const tokenHash = this.hashToken(rawRefreshToken);
+    const storedToken =
+      await this.refreshTokenRepository.findByTokenHash(tokenHash);
+
+    if (!storedToken || storedToken.revokedAt) {
+      return;
+    }
+
+    await this.refreshTokenRepository.revoke(tokenHash);
+  }
+
+  private async buildAccessTokenResponse(
+    user: User,
+  ): Promise<AccessTokenResponse> {
     const payload = { email: user.email, userId: user.id };
+    const refreshToken = await this.issueRefreshToken(user.id);
 
     return {
       accessToken: this.jwtService.sign(payload),
+      accessTokenExpiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      refreshToken,
       user: {
         id: user.id,
         name: `${user.firstName} ${user.lastName}`,
@@ -114,6 +187,25 @@ export class AuthService {
         username: user.username,
       },
     };
+  }
+
+  private async issueRefreshToken(userId: number): Promise<string> {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(
+      Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    await this.refreshTokenRepository.create(
+      userId,
+      this.hashToken(rawToken),
+      expiresAt,
+    );
+
+    return rawToken;
+  }
+
+  private hashToken(rawToken: string): string {
+    return crypto.createHash('sha256').update(rawToken).digest('hex');
   }
 
   async enable2FA(userId: number): Promise<Enable2FAType> {
