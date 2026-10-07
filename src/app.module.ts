@@ -10,6 +10,8 @@ import { ConfigModule } from '@nestjs/config';
 import { TransactionsModule } from './module/transactions/transactions.module';
 import { PeriodsModule } from './module/periods/periods.module';
 import { FixedExpensesModule } from './module/fixed-expenses/fixed-expenses.module';
+import { FinancialInstitutionsModule } from './module/financial-institutions/financial-institutions.module';
+import { GmailModule } from './module/gmail/gmail.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { FixedExpensesModule } from './module/fixed-expenses/fixed-expenses.modu
     TransactionsModule,
     PeriodsModule,
     FixedExpensesModule,
+    FinancialInstitutionsModule,
+    GmailModule,
   ],
   controllers: [],
   providers: [

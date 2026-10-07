@@ -9,30 +9,33 @@ datasource db {
 }
 
 model User {
-  id                 Int            @id @default(autoincrement())
-  username           String         @unique
-  isActive           Boolean        @default(false) @map("is_active")
-  isGoogleAccount    Boolean        @default(false) @map("is_google_account")
-  activationToken    String?        @unique @map("activation_token")
-  transactions       Transaction[]
-  fixedExpenses      FixedExpense[]
-  salary             Salary[]
-  refreshTokens      RefreshToken[]
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-  apiKey             String?        @unique @map("api_key")
-  enable2FA          Boolean        @default(false) @map("enable_2fa")
-  twoFASecret        String?        @map("2fa_secret")
-  qr2FA              String?        @map("qr_2fa")
-  password           String?
-  email              String         @unique
-  lastName           String?        @map("last_name")
-  firstName          String?        @map("first_name")
-  resetPasswordToken String?        @map("reset_password_token")
-  payFrequency       PayFrequency   @default(Biweekly) @map("pay_frequency")
-  needsPercent       Float          @default(0.5) @map("needs_percent")
-  wantsPercent       Float          @default(0.3) @map("wants_percent")
-  savingsPercent     Float          @default(0.2) @map("savings_percent")
+  id                    Int                    @id @default(autoincrement())
+  username              String                 @unique
+  isActive              Boolean                @default(false) @map("is_active")
+  isGoogleAccount       Boolean                @default(false) @map("is_google_account")
+  activationToken       String?                @unique @map("activation_token")
+  transactions          Transaction[]
+  fixedExpenses         FixedExpense[]
+  salary                Salary[]
+  refreshTokens         RefreshToken[]
+  financialInstitutions FinancialInstitution[]
+  gmailConnection       GmailConnection?
+  processedEmails       ProcessedEmail[]
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  apiKey                String?                @unique @map("api_key")
+  enable2FA             Boolean                @default(false) @map("enable_2fa")
+  twoFASecret           String?                @map("2fa_secret")
+  qr2FA                 String?                @map("qr_2fa")
+  password              String?
+  email                 String                 @unique
+  lastName              String?                @map("last_name")
+  firstName             String?                @map("first_name")
+  resetPasswordToken    String?                @map("reset_password_token")
+  payFrequency          PayFrequency           @default(Biweekly) @map("pay_frequency")
+  needsPercent          Float                  @default(0.5) @map("needs_percent")
+  wantsPercent          Float                  @default(0.3) @map("wants_percent")
+  savingsPercent        Float                  @default(0.2) @map("savings_percent")
 
   @@index([username, email], name: "user_search_idx")
   @@map("users")
@@ -44,18 +47,24 @@ enum PayFrequency {
 }
 
 model Transaction {
-  id             Int             @id @default(autoincrement())
-  userId         Int             @map("user_id")
-  user           User            @relation(fields: [userId], references: [id])
-  amount         Float
-  date           DateTime
-  category       BudgetCategory
-  description    String?
-  periodOverride PeriodOverride? @map("period_override")
-  fixedExpenseId Int?            @map("fixed_expense_id")
-  fixedExpense   FixedExpense?   @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id              Int                     @id @default(autoincrement())
+  userId          Int                     @map("user_id")
+  user            User                    @relation(fields: [userId], references: [id])
+  amount          Float
+  date            DateTime
+  category        BudgetCategory?
+  description     String?
+  periodOverride  PeriodOverride?         @map("period_override")
+  fixedExpenseId  Int?                    @map("fixed_expense_id")
+  fixedExpense    FixedExpense?           @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
+  source          MovementSource          @default(Manual)
+  reviewStatus    TransactionReviewStatus @default(Confirmed) @map("review_status")
+  institutionId   Int?                    @map("institution_id")
+  institution     FinancialInstitution?   @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  gmailMessageId  String?                 @map("gmail_message_id")
+  processedEmails ProcessedEmail[]
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
   @@map("transactions")
@@ -91,16 +100,23 @@ model FixedExpense {
 }
 
 model Salary {
-  id                      Int             @id @default(autoincrement())
-  userId                  Int             @map("user_id")
-  user                    User            @relation(fields: [userId], references: [id])
+  id                      Int                   @id @default(autoincrement())
+  userId                  Int                   @map("user_id")
+  user                    User                  @relation(fields: [userId], references: [id])
   amount                  Float
   date                    DateTime
-  type                    IncomeType      @default(Payroll)
-  budgetCategory          BudgetCategory? @map("budget_category")
-  distributeAutomatically Boolean         @default(false) @map("distribute_automatically")
-  createdAt               DateTime        @default(now()) @map("created_at")
-  updatedAt               DateTime        @updatedAt @map("updated_at")
+  type                    IncomeType            @default(Payroll)
+  budgetCategory          BudgetCategory?       @map("budget_category")
+  distributeAutomatically Boolean               @default(false) @map("distribute_automatically")
+  source                  MovementSource        @default(Manual)
+  status                  IncomeReviewStatus    @default(Classified)
+  incomeCategory          IncomeCategory?       @map("income_category")
+  institutionId           Int?                  @map("institution_id")
+  institution             FinancialInstitution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  gmailMessageId          String?               @map("gmail_message_id")
+  processedEmails         ProcessedEmail[]
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
 
   @@index([userId, date], name: "salary_user_date_idx")
   @@map("salaries")
@@ -109,6 +125,46 @@ model Salary {
 enum IncomeType {
   Payroll
   Extra
+}
+
+enum MovementSource {
+  Manual
+  Gmail
+}
+
+enum TransactionReviewStatus {
+  Detected
+  PendingReview
+  Confirmed
+}
+
+enum IncomeReviewStatus {
+  Detected
+  PendingReview
+  Classified
+}
+
+enum IncomeCategory {
+  Payroll
+  Extra
+  Transfer
+  Reimbursement
+  Deposit
+  Other
+}
+
+enum ProcessedEmailResult {
+  Created
+  Ignored
+  Failed
+  NeedsReview
+}
+
+enum GmailConnectionStatus {
+  Connected
+  Disconnected
+  Expired
+  Revoked
 }
 
 model RefreshToken {
@@ -123,4 +179,69 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model FinancialInstitution {
+  id           Int                 @id @default(autoincrement())
+  userId       Int                 @map("user_id")
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  isActive     Boolean             @default(true) @map("is_active")
+  senders      InstitutionSender[]
+  transactions Transaction[]
+  salaries     Salary[]
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("financial_institutions")
+}
+
+model InstitutionSender {
+  id            Int                  @id @default(autoincrement())
+  institutionId Int                  @map("institution_id")
+  institution   FinancialInstitution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  emailAddress  String               @map("email_address")
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  @@unique([institutionId, emailAddress])
+  @@map("institution_senders")
+}
+
+model GmailConnection {
+  id                    Int                   @id @default(autoincrement())
+  userId                Int                   @unique @map("user_id")
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedAccessToken  String                @map("encrypted_access_token")
+  encryptedRefreshToken String                @map("encrypted_refresh_token")
+  tokenExpiresAt        DateTime?             @map("token_expires_at")
+  grantedScope          String?               @map("granted_scope")
+  lastHistoryId         String?               @map("last_history_id")
+  lastSyncAt            DateTime?             @map("last_sync_at")
+  status                GmailConnectionStatus @default(Connected)
+  autoDetectEnabled     Boolean               @default(true) @map("auto_detect_enabled")
+  notifyIncomeEnabled   Boolean               @default(true) @map("notify_income_enabled")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  @@map("gmail_connections")
+}
+
+model ProcessedEmail {
+  id                   Int                  @id @default(autoincrement())
+  userId               Int                  @map("user_id")
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailMessageId       String               @map("gmail_message_id")
+  senderEmail          String?              @map("sender_email")
+  result               ProcessedEmailResult
+  reason               String?
+  parserVersion        String?              @map("parser_version")
+  relatedTransactionId Int?                 @map("related_transaction_id")
+  relatedTransaction   Transaction?         @relation(fields: [relatedTransactionId], references: [id], onDelete: SetNull)
+  relatedSalaryId      Int?                 @map("related_salary_id")
+  relatedSalary        Salary?              @relation(fields: [relatedSalaryId], references: [id], onDelete: SetNull)
+  processedAt          DateTime             @default(now()) @map("processed_at")
+
+  @@unique([userId, gmailMessageId])
+  @@map("processed_emails")
 }
