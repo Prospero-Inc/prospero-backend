@@ -35,10 +35,14 @@ export class TransactionsController {
 
   @Get()
   findAll(@Request() req, @Query() query: FindTransactionsQueryDto) {
-    return this.transactionsService.findAllForUser(req.user.userId, {
-      from: query.from ? new Date(query.from) : undefined,
-      to: query.to ? new Date(query.to) : undefined,
-    });
+    return this.transactionsService.findAllForUserWithPossibleDuplicates(
+      req.user.userId,
+      {
+        from: query.from ? new Date(query.from) : undefined,
+        to: query.to ? new Date(query.to) : undefined,
+        reviewStatus: query.reviewStatus,
+      },
+    );
   }
 
   @Patch(':id')

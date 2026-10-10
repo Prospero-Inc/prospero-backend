@@ -1,13 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { TransactionReviewStatus } from '@prisma/client';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from '../services/transactions.service';
 
 describe('TransactionsController', () => {
   let controller: TransactionsController;
-  let service: { create: jest.Mock; findAllForUser: jest.Mock };
+  let service: {
+    create: jest.Mock;
+    findAllForUserWithPossibleDuplicates: jest.Mock;
+  };
 
   beforeEach(async () => {
-    service = { create: jest.fn(), findAllForUser: jest.fn() };
+    service = {
+      create: jest.fn(),
+      findAllForUserWithPossibleDuplicates: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TransactionsController],
@@ -35,9 +42,34 @@ describe('TransactionsController', () => {
 
     controller.findAll(req, {});
 
-    expect(service.findAllForUser).toHaveBeenCalledWith(7, {
-      from: undefined,
-      to: undefined,
+    expect(service.findAllForUserWithPossibleDuplicates).toHaveBeenCalledWith(
+      7,
+      {
+        from: undefined,
+        to: undefined,
+        reviewStatus: undefined,
+      },
+    );
+  });
+
+  it('propagates the reviewStatus filter straight through to the service', () => {
+    const req = { user: { userId: 7 } };
+
+    controller.findAll(req, {
+      reviewStatus: [
+        TransactionReviewStatus.Detected,
+        TransactionReviewStatus.PendingReview,
+      ],
     });
+
+    expect(service.findAllForUserWithPossibleDuplicates).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        reviewStatus: [
+          TransactionReviewStatus.Detected,
+          TransactionReviewStatus.PendingReview,
+        ],
+      }),
+    );
   });
 });

@@ -8,6 +8,10 @@ import { InstitutionSendersRepository } from '../repositories/institution-sender
 import { CreateFinancialInstitutionDto } from '../dto/create-financial-institution.dto';
 import { UpdateFinancialInstitutionDto } from '../dto/update-financial-institution.dto';
 import { CreateInstitutionSenderDto } from '../dto/create-institution-sender.dto';
+import {
+  SUPPORTED_PARSERS,
+  SupportedParserInfo,
+} from '../../gmail-sync/parsers/bank-parser.registry';
 
 @Injectable()
 export class FinancialInstitutionsService {
@@ -43,6 +47,12 @@ export class FinancialInstitutionsService {
         `${emailAddress} is already configured as a sender for one of your institutions`,
       );
     }
+  }
+
+  /** Backs `GET /financial-institutions/supported-parsers`, the frontend's
+   * bank-selection dropdown. */
+  listSupportedParsers(): SupportedParserInfo[] {
+    return SUPPORTED_PARSERS;
   }
 
   async create(userId: number, dto: CreateFinancialInstitutionDto) {
@@ -101,5 +111,11 @@ export class FinancialInstitutionsService {
     }
 
     return this.institutionSendersRepository.delete(senderId);
+  }
+
+  /** Used by GmailSyncOrchestrator to build the Gmail search query — only
+   * senders of this user's active institutions. */
+  findActiveSendersForUser(userId: number) {
+    return this.institutionSendersRepository.findActiveSendersForUser(userId);
   }
 }

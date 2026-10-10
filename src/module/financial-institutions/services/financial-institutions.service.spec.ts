@@ -55,6 +55,14 @@ describe('FinancialInstitutionsService', () => {
     expect(service).toBeDefined();
   });
 
+  it('listSupportedParsers returns the bank parser registry entries', () => {
+    expect(service.listSupportedParsers()).toEqual(
+      expect.arrayContaining([
+        { key: 'banco_agricola', label: 'Banco Agrícola' },
+      ]),
+    );
+  });
+
   describe('create', () => {
     it('creates an institution scoped to the given user, with no senders', async () => {
       const dto = { name: 'Banco X' };

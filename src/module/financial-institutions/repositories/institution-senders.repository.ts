@@ -26,6 +26,17 @@ export class InstitutionSendersRepository {
     });
   }
 
+  // Used by GmailSyncOrchestrator to build the Gmail search query: only
+  // senders belonging to institutions the user has marked active — spec §11
+  // ("no leer correos ajenos al propósito") means an inactive institution's
+  // senders must never be queried.
+  findActiveSendersForUser(userId: number) {
+    return this.prisma.institutionSender.findMany({
+      where: { institution: { userId, isActive: true } },
+      include: { institution: true },
+    });
+  }
+
   delete(id: number) {
     return this.prisma.institutionSender.delete({
       where: { id },

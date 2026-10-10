@@ -28,6 +28,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { SalaryDetailsDto } from '../dto/salary-details.dto';
+import { FindSalaryQueryDto } from '../dto/find-salary-query.dto';
 
 @ApiTags('salary')
 @ApiBearerAuth('JWT-auth')
@@ -65,8 +66,12 @@ export class SalaryController {
 
   @Get()
   @ApiOperation({ summary: 'Listar todos los ingresos del usuario' })
-  async findAll(@Request() req) {
-    const salaries = await this.salaryService.findAllForUser(req.user.userId);
+  async findAll(@Request() req, @Query() query: FindSalaryQueryDto) {
+    const salaries =
+      await this.salaryService.findAllForUserWithPossibleDuplicates(
+        req.user.userId,
+        { status: query.status },
+      );
     return [...salaries].reverse();
   }
 

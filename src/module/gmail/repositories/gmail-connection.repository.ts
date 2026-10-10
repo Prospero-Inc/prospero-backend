@@ -49,4 +49,15 @@ export class GmailConnectionRepository {
   delete(userId: number): Promise<GmailConnection> {
     return this.prisma.gmailConnection.delete({ where: { userId } });
   }
+
+  /** Candidates for `GmailSyncScheduler`'s hourly cron: only connections that
+   * are actually usable (`Connected`) and have auto-detection turned on. */
+  findConnectedWithAutoDetect(): Promise<GmailConnection[]> {
+    return this.prisma.gmailConnection.findMany({
+      where: {
+        status: GmailConnectionStatus.Connected,
+        autoDetectEnabled: true,
+      },
+    });
+  }
 }
