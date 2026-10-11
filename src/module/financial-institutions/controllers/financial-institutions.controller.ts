@@ -26,6 +26,13 @@ export class FinancialInstitutionsController {
     private readonly financialInstitutionsService: FinancialInstitutionsService,
   ) {}
 
+  // Static path registered before any dynamic ':id' GET to avoid ambiguity
+  // (there isn't one on this controller today, but this keeps it future-proof).
+  @Get('supported-parsers')
+  listSupportedParsers() {
+    return this.financialInstitutionsService.listSupportedParsers();
+  }
+
   @Post()
   create(
     @Request() req,

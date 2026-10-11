@@ -5,13 +5,18 @@ import { UserService } from '../../user/user.service';
 
 describe('SalaryController', () => {
   let controller: SalaryController;
-  let salaryService: { create: jest.Mock; distributeSalaryPreview: jest.Mock };
+  let salaryService: {
+    create: jest.Mock;
+    distributeSalaryPreview: jest.Mock;
+    findAllForUserWithPossibleDuplicates: jest.Mock;
+  };
   let userService: { findById: jest.Mock };
 
   beforeEach(async () => {
     salaryService = {
       create: jest.fn(),
       distributeSalaryPreview: jest.fn(),
+      findAllForUserWithPossibleDuplicates: jest.fn().mockResolvedValue([]),
     };
     userService = { findById: jest.fn() };
 
@@ -37,6 +42,31 @@ describe('SalaryController', () => {
     await controller.createSalary(req, dto);
 
     expect(salaryService.create).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('lists salaries scoped to the authenticated user and reverses them to most-recent-first', async () => {
+    const req = { user: { userId: 7 } };
+    salaryService.findAllForUserWithPossibleDuplicates.mockResolvedValue([
+      { id: 1 },
+      { id: 2 },
+    ]);
+
+    const result = await controller.findAll(req, {});
+
+    expect(
+      salaryService.findAllForUserWithPossibleDuplicates,
+    ).toHaveBeenCalledWith(7, { status: undefined });
+    expect(result).toEqual([{ id: 2 }, { id: 1 }]);
+  });
+
+  it('propagates the status filter straight through to the service', async () => {
+    const req = { user: { userId: 7 } };
+
+    await controller.findAll(req, { status: ['Detected'] as any });
+
+    expect(
+      salaryService.findAllForUserWithPossibleDuplicates,
+    ).toHaveBeenCalledWith(7, { status: ['Detected'] });
   });
 
   it('builds the preview strategy from the authenticated user settings', async () => {

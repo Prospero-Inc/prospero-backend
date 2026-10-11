@@ -177,6 +177,21 @@ export class GmailOAuthService {
     };
   }
 
+  /** Raw connection for a manual "sync now" trigger. Throws if there's
+   * nothing to sync (never connected, or disconnected) — the caller turns
+   * that into a clear 404 rather than silently doing nothing. */
+  async getActiveConnectionForUser(userId: number) {
+    const connection = await this.connectionRepository.findByUserId(userId);
+
+    if (!connection || connection.status !== GmailConnectionStatus.Connected) {
+      throw new NotFoundException(
+        'No hay una cuenta de Gmail conectada para este usuario',
+      );
+    }
+
+    return connection;
+  }
+
   async updatePreferences(
     userId: number,
     dto: UpdateGmailPreferencesDto,
@@ -253,6 +268,25 @@ export class GmailOAuthService {
     });
 
     return decryptToken(encryptedAccessToken);
+  }
+
+  /**
+   * Candidates for `GmailSyncScheduler`'s hourly cron — connections that are
+   * `Connected` and have auto-detection enabled. Kept on this service (not a
+   * raw repository export) so GmailModule's only public surface stays
+   * `GmailOAuthService`, same as everywhere else in the app.
+   */
+  listConnectionsForAutoSync() {
+    return this.connectionRepository.findConnectedWithAutoDetect();
+  }
+
+  /** Called by GmailSyncOrchestrator once a user's sync pass finishes
+   * (successfully or not — see the scheduler's per-user try/catch), so the
+   * next run knows where the incremental window should start from. */
+  markSynced(userId: number, syncedAt: Date): Promise<void> {
+    return this.connectionRepository
+      .update(userId, { lastSyncAt: syncedAt })
+      .then(() => undefined);
   }
 
   private signOAuthState(userId: number): string {

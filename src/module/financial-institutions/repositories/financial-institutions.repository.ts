@@ -2,11 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/module/prisma.service';
 import { UpdateFinancialInstitutionDto } from '../dto/update-financial-institution.dto';
 
+export interface CreateFinancialInstitutionData {
+  name: string;
+  isActive?: boolean;
+  parserKey?: string;
+}
+
 @Injectable()
 export class FinancialInstitutionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(userId: number, data: { name: string; isActive?: boolean }) {
+  create(userId: number, data: CreateFinancialInstitutionData) {
     return this.prisma.financialInstitution.create({
       data: { ...data, userId },
       include: { senders: true },

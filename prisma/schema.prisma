@@ -158,6 +158,7 @@ enum ProcessedEmailResult {
   Ignored
   Failed
   NeedsReview
+  PossibleDuplicate
 }
 
 enum GmailConnectionStatus {
@@ -187,6 +188,11 @@ model FinancialInstitution {
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   isActive     Boolean             @default(true) @map("is_active")
+  // Key into the code-level parser registry (BankParserRegistry), NOT a
+  // Postgres enum on purpose: adding support for a new bank should never
+  // require a migration. Unknown/absent keys just mean "no parser
+  // configured yet" — see gmail-sync's registry for the source of truth.
+  parserKey    String?             @map("parser_key")
   senders      InstitutionSender[]
   transactions Transaction[]
   salaries     Salary[]
@@ -240,8 +246,26 @@ model ProcessedEmail {
   relatedTransaction   Transaction?         @relation(fields: [relatedTransactionId], references: [id], onDelete: SetNull)
   relatedSalaryId      Int?                 @map("related_salary_id")
   relatedSalary        Salary?              @relation(fields: [relatedSalaryId], references: [id], onDelete: SetNull)
+  // Snapshot of what the parser actually extracted, captured at
+  // detection time regardless of `result` — needed so a PossibleDuplicate
+  // row can later be turned into a real Transaction via the
+  // "create-anyway" flow without ever inventing amount/date/description.
+  // Nullable because older rows (pre-migration) never had this captured.
+  parsedAmount         Float?               @map("parsed_amount")
+  parsedDate           DateTime?            @map("parsed_date")
+  parsedDescription    String?              @map("parsed_description")
+  // Set once the user has acted on a PossibleDuplicate (via "create
+  // anyway" or, in the future, an explicit dismiss) so the
+  // possibleGmailDuplicate badge on the related transaction stops
+  // appearing. Null means "still awaiting user action".
+  resolvedAt           DateTime?            @map("resolved_at")
   processedAt          DateTime             @default(now()) @map("processed_at")
 
   @@unique([userId, gmailMessageId])
+  // Supports the possibleGmailDuplicate lookup transactions/salary do on
+  // every list read: "find an unresolved PossibleDuplicate email pointing
+  // at this row".
+  @@index([relatedTransactionId, result, resolvedAt])
+  @@index([relatedSalaryId, result, resolvedAt])
   @@map("processed_emails")
 }
