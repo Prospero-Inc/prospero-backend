@@ -32,8 +32,8 @@ FROM node:18.16.0-slim
 # Establecer el directorio de trabajo
 WORKDIR /usr/src/app
 
-# Instalar OpenSSL
-RUN apt-get update && apt-get install -y openssl
+# Instalar OpenSSL y tzdata (requerido para que TZ resuelva zonas con nombre, ej. America/El_Salvador)
+RUN apt-get update && apt-get install -y openssl tzdata
 
 # Copiar los archivos necesarios desde la etapa de construcción
 COPY --from=builder /usr/src/app/package*.json ./

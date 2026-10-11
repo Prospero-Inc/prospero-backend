@@ -9,33 +9,35 @@ datasource db {
 }
 
 model User {
-  id                    Int                    @id @default(autoincrement())
-  username              String                 @unique
-  isActive              Boolean                @default(false) @map("is_active")
-  isGoogleAccount       Boolean                @default(false) @map("is_google_account")
-  activationToken       String?                @unique @map("activation_token")
-  transactions          Transaction[]
-  fixedExpenses         FixedExpense[]
-  salary                Salary[]
-  refreshTokens         RefreshToken[]
-  financialInstitutions FinancialInstitution[]
-  gmailConnection       GmailConnection?
-  processedEmails       ProcessedEmail[]
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  apiKey                String?                @unique @map("api_key")
-  enable2FA             Boolean                @default(false) @map("enable_2fa")
-  twoFASecret           String?                @map("2fa_secret")
-  qr2FA                 String?                @map("qr_2fa")
-  password              String?
-  email                 String                 @unique
-  lastName              String?                @map("last_name")
-  firstName             String?                @map("first_name")
-  resetPasswordToken    String?                @map("reset_password_token")
-  payFrequency          PayFrequency           @default(Biweekly) @map("pay_frequency")
-  needsPercent          Float                  @default(0.5) @map("needs_percent")
-  wantsPercent          Float                  @default(0.3) @map("wants_percent")
-  savingsPercent        Float                  @default(0.2) @map("savings_percent")
+  id                     Int                     @id @default(autoincrement())
+  username               String                  @unique
+  isActive               Boolean                 @default(false) @map("is_active")
+  isGoogleAccount        Boolean                 @default(false) @map("is_google_account")
+  activationToken        String?                 @unique @map("activation_token")
+  transactions           Transaction[]
+  fixedExpenses          FixedExpense[]
+  salary                 Salary[]
+  refreshTokens          RefreshToken[]
+  financialInstitutions  FinancialInstitution[]
+  gmailConnection        GmailConnection?
+  processedEmails        ProcessedEmail[]
+  notificationPreference NotificationPreference?
+  notificationLogs       NotificationLog[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  apiKey                 String?                 @unique @map("api_key")
+  enable2FA              Boolean                 @default(false) @map("enable_2fa")
+  twoFASecret            String?                 @map("2fa_secret")
+  qr2FA                  String?                 @map("qr_2fa")
+  password               String?
+  email                  String                  @unique
+  lastName               String?                 @map("last_name")
+  firstName              String?                 @map("first_name")
+  resetPasswordToken     String?                 @map("reset_password_token")
+  payFrequency           PayFrequency            @default(Biweekly) @map("pay_frequency")
+  needsPercent           Float                   @default(0.5) @map("needs_percent")
+  wantsPercent           Float                   @default(0.3) @map("wants_percent")
+  savingsPercent         Float                   @default(0.2) @map("savings_percent")
 
   @@index([username, email], name: "user_search_idx")
   @@map("users")
@@ -255,9 +257,9 @@ model ProcessedEmail {
   parsedDate           DateTime?            @map("parsed_date")
   parsedDescription    String?              @map("parsed_description")
   // Set once the user has acted on a PossibleDuplicate (via "create
-  // anyway" or, in the future, an explicit dismiss) so the
-  // possibleGmailDuplicate badge on the related transaction stops
-  // appearing. Null means "still awaiting user action".
+  // anyway" or "dismiss") so the possibleGmailDuplicate badge on the
+  // related transaction stops appearing. Null means "still awaiting user
+  // action".
   resolvedAt           DateTime?            @map("resolved_at")
   processedAt          DateTime             @default(now()) @map("processed_at")
 
@@ -268,4 +270,58 @@ model ProcessedEmail {
   @@index([relatedTransactionId, result, resolvedAt])
   @@index([relatedSalaryId, result, resolvedAt])
   @@map("processed_emails")
+}
+
+// Only "Email" exists today — the notifications module (src/module/
+// notifications) is written against a NotificationProvider interface so a
+// Push/FCM provider can be added later without touching call sites, but no
+// such provider exists yet (needs Firebase credentials + a frontend service
+// worker/VAPID key that haven't been built). Don't add a `Push` value here
+// until a real provider backs it — see notifications module's README-style
+// comment in notifications.types.ts for the full reasoning.
+enum NotificationChannel {
+  Email
+}
+
+// GmailReviewPending is wired end-to-end (GmailSyncScheduler triggers it
+// after a sync pass creates new PendingReview transactions).
+// BudgetThresholdAlert is reserved for spec §8's budget-threshold alerts —
+// no caller triggers it yet, see notifications module docs.
+enum NotificationType {
+  GmailReviewPending
+  BudgetThresholdAlert
+}
+
+// Per-user opt-in/opt-out, one row per user (created lazily on first write;
+// absence means "all defaults enabled", see NotificationPreferenceRepository).
+model NotificationPreference {
+  id                      Int      @id @default(autoincrement())
+  userId                  Int      @unique @map("user_id")
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailReviewEmailEnabled Boolean  @default(true) @map("gmail_review_email_enabled")
+  budgetAlertEmailEnabled Boolean  @default(true) @map("budget_alert_email_enabled")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_preferences")
+}
+
+// Audit trail of every notification actually dispatched (one row per
+// provider/channel attempt that succeeded) — doubles as the foundation for
+// a future in-app notification center and for dedupe logic a
+// BudgetThresholdAlert consumer would need (e.g. "don't re-alert the same
+// period"). A failed provider.send() is logged via Logger, not here, by
+// design: this table is "what the user was actually sent", not a retry queue.
+model NotificationLog {
+  id       Int                 @id @default(autoincrement())
+  userId   Int                 @map("user_id")
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type     NotificationType
+  channel  NotificationChannel
+  subject  String
+  metadata Json?
+  sentAt   DateTime            @default(now()) @map("sent_at")
+
+  @@index([userId, type, sentAt])
+  @@map("notification_logs")
 }

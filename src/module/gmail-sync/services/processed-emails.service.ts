@@ -11,8 +11,8 @@ import { ProcessedEmailRepository } from '../repositories/processed-email.reposi
 /**
  * Product decision already confirmed with the co-founder: there is no
  * "remember my choice for this sender" — every `PossibleDuplicate` is
- * resolved one at a time, explicitly, via this single action. Do not add a
- * per-sender preference here.
+ * resolved one at a time, explicitly, via one of these two actions. Do not
+ * add a per-sender preference here.
  */
 @Injectable()
 export class ProcessedEmailsService {
@@ -72,5 +72,36 @@ export class ProcessedEmailsService {
     await this.processedEmailRepository.markResolved(processedEmail.id);
 
     return created;
+  }
+
+  /**
+   * "Es el mismo, ignorar": the user confirms the email really is the same
+   * movement as the manual transaction it was compared against. Creates
+   * nothing — just marks the email resolved so its badge disappears from
+   * `GET /transactions`.
+   */
+  async dismiss(id: number, userId: number): Promise<void> {
+    const processedEmail = await this.processedEmailRepository.findOneOwned(
+      id,
+      userId,
+    );
+
+    if (!processedEmail) {
+      throw new NotFoundException('Processed email not found');
+    }
+
+    if (processedEmail.result !== ProcessedEmailResult.PossibleDuplicate) {
+      throw new NotFoundException(
+        'This processed email was never flagged as a possible duplicate',
+      );
+    }
+
+    if (processedEmail.resolvedAt !== null) {
+      throw new ConflictException(
+        'This possible duplicate was already resolved',
+      );
+    }
+
+    await this.processedEmailRepository.markResolved(processedEmail.id);
   }
 }

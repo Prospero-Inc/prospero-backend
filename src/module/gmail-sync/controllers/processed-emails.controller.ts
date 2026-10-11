@@ -27,4 +27,13 @@ export class ProcessedEmailsController {
   createAnyway(@Request() req, @Param('id', ParseIntPipe) id: number) {
     return this.processedEmailsService.createAnyway(id, req.user.userId);
   }
+
+  @Post(':id/dismiss')
+  @ApiOperation({
+    summary:
+      'Descarta un correo marcado como "posible duplicado": confirma que es el mismo movimiento ya ingresado y no crea ninguna transacción nueva',
+  })
+  dismiss(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.processedEmailsService.dismiss(id, req.user.userId);
+  }
 }

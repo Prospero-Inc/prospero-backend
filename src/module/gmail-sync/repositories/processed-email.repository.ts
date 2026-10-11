@@ -66,7 +66,8 @@ export class ProcessedEmailRepository {
   }
 
   /** Marks a `PossibleDuplicate` row as handled by the user (via
-   * "create-anyway" today) so `possibleGmailDuplicate` stops surfacing it. */
+   * "create-anyway" or "dismiss") so `possibleGmailDuplicate` stops
+   * surfacing it. */
   markResolved(id: number): Promise<ProcessedEmail> {
     return this.prisma.processedEmail.update({
       where: { id },

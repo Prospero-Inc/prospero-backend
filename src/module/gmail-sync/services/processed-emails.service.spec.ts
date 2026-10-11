@@ -124,4 +124,48 @@ describe('ProcessedEmailsService', () => {
       expect.objectContaining({ description: undefined }),
     );
   });
+
+  describe('dismiss', () => {
+    it('throws NotFoundException when the email does not belong to the user (or does not exist)', async () => {
+      processedEmailRepository.findOneOwned.mockResolvedValue(null);
+
+      await expect(service.dismiss(1, 5)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(processedEmailRepository.markResolved).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the email was never a PossibleDuplicate', async () => {
+      processedEmailRepository.findOneOwned.mockResolvedValue(
+        possibleDuplicateEmail({ result: ProcessedEmailResult.Created }),
+      );
+
+      await expect(service.dismiss(1, 5)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(processedEmailRepository.markResolved).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when the possible duplicate was already resolved', async () => {
+      processedEmailRepository.findOneOwned.mockResolvedValue(
+        possibleDuplicateEmail({ resolvedAt: new Date('2026-10-08') }),
+      );
+
+      await expect(service.dismiss(1, 5)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(processedEmailRepository.markResolved).not.toHaveBeenCalled();
+    });
+
+    it('marks the email resolved and creates nothing', async () => {
+      processedEmailRepository.findOneOwned.mockResolvedValue(
+        possibleDuplicateEmail(),
+      );
+
+      await service.dismiss(1, 5);
+
+      expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
+      expect(processedEmailRepository.markResolved).toHaveBeenCalledWith(1);
+    });
+  });
 });

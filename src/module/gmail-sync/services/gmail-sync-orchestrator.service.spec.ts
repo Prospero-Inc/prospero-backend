@@ -7,7 +7,6 @@ import { ProcessedEmailRepository } from '../repositories/processed-email.reposi
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
 import { FinancialInstitutionsService } from 'src/module/financial-institutions/services/financial-institutions.service';
 import { TransactionsService } from 'src/module/transactions/services/transactions.service';
-import { SalaryService } from 'src/module/salary/services/salary.service';
 
 const AGRICOLA_SENDER = {
   id: 1,
@@ -60,7 +59,6 @@ describe('GmailSyncOrchestrator', () => {
   };
   let duplicateDetector: { findManualDuplicate: jest.Mock };
   let transactionsService: { createFromGmail: jest.Mock };
-  let salaryService: { createFromGmail: jest.Mock };
 
   const connection = {
     id: 1,
@@ -87,9 +85,6 @@ describe('GmailSyncOrchestrator', () => {
     transactionsService = {
       createFromGmail: jest.fn().mockResolvedValue({ id: 100 }),
     };
-    salaryService = {
-      createFromGmail: jest.fn().mockResolvedValue({ id: 200 }),
-    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -106,7 +101,6 @@ describe('GmailSyncOrchestrator', () => {
         },
         { provide: DuplicateDetectorService, useValue: duplicateDetector },
         { provide: TransactionsService, useValue: transactionsService },
-        { provide: SalaryService, useValue: salaryService },
       ],
     }).compile();
 
@@ -117,7 +111,7 @@ describe('GmailSyncOrchestrator', () => {
     gmailApiClient.listMessageIds.mockResolvedValue([{ id: 'msg-1' }]);
     gmailApiClient.getMessage.mockResolvedValue(buildRecargaMessage());
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(transactionsService.createFromGmail).toHaveBeenCalledWith(
       7,
@@ -139,6 +133,27 @@ describe('GmailSyncOrchestrator', () => {
       7,
       expect.any(Date),
     );
+    // Drives GmailSyncScheduler's decision to notify the user — see
+    // notifications module.
+    expect(result).toEqual({ transactionsCreated: 1 });
+  });
+
+  it('counts one transaction per message created across a batch of several messages', async () => {
+    gmailApiClient.listMessageIds.mockResolvedValue([
+      { id: 'msg-1' },
+      { id: 'msg-2' },
+    ]);
+    gmailApiClient.getMessage
+      .mockResolvedValueOnce(buildRecargaMessage({ messageId: 'msg-1' }))
+      .mockResolvedValueOnce(buildRecargaMessage({ messageId: 'msg-2' }));
+    transactionsService.createFromGmail
+      .mockResolvedValueOnce({ id: 100 })
+      .mockResolvedValueOnce({ id: 101 });
+
+    const result = await orchestrator.syncConnection(connection);
+
+    expect(transactionsService.createFromGmail).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ transactionsCreated: 2 });
   });
 
   it('a recarga that matches an existing manual transaction is PossibleDuplicate and creates nothing', async () => {
@@ -146,7 +161,7 @@ describe('GmailSyncOrchestrator', () => {
     gmailApiClient.getMessage.mockResolvedValue(buildRecargaMessage());
     duplicateDetector.findManualDuplicate.mockResolvedValue({ id: 555 });
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
     expect(processedEmailRepository.create).toHaveBeenCalledWith(
@@ -155,6 +170,7 @@ describe('GmailSyncOrchestrator', () => {
         relatedTransactionId: 555,
       }),
     );
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('an unmapped transaction type is NeedsReview and creates nothing', async () => {
@@ -175,16 +191,16 @@ describe('GmailSyncOrchestrator', () => {
     gmailApiClient.listMessageIds.mockResolvedValue([{ id: 'msg-1' }]);
     gmailApiClient.getMessage.mockResolvedValue(message);
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
-    expect(salaryService.createFromGmail).not.toHaveBeenCalled();
     expect(processedEmailRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         result: ProcessedEmailResult.NeedsReview,
         reason: expect.stringContaining('Transferencia'),
       }),
     );
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('an email from an unconfigured sender is Ignored and creates nothing', async () => {
@@ -217,22 +233,24 @@ describe('GmailSyncOrchestrator', () => {
       result: ProcessedEmailResult.Created,
     });
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(gmailApiClient.getMessage).not.toHaveBeenCalled();
     expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
     expect(processedEmailRepository.create).not.toHaveBeenCalled();
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('skips the whole user without throwing when there are no active senders configured', async () => {
     financialInstitutionsService.findActiveSendersForUser.mockResolvedValue([]);
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(gmailApiClient.listMessageIds).not.toHaveBeenCalled();
     expect(gmailOAuthService.markSynced).toHaveBeenCalledWith(
       7,
       expect.any(Date),
     );
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 });

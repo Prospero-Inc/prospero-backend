@@ -8,7 +8,6 @@ import {
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
 import { FinancialInstitutionsService } from 'src/module/financial-institutions/services/financial-institutions.service';
 import { TransactionsService } from 'src/module/transactions/services/transactions.service';
-import { SalaryService } from 'src/module/salary/services/salary.service';
 import { GmailApiClient } from './gmail-api-client.service';
 import { DuplicateDetectorService } from './duplicate-detector.service';
 import {
@@ -30,6 +29,13 @@ type SenderWithInstitution = InstitutionSender & {
   institution: FinancialInstitution;
 };
 
+/** Outcome of a single connection's sync pass — `transactionsCreated` lets
+ * `GmailSyncScheduler` decide whether to notify the user, without this
+ * class knowing anything about notifications itself. */
+export interface SyncConnectionResult {
+  transactionsCreated: number;
+}
+
 /**
  * Per-user sync pass: list → fetch → classify → create/skip → audit. Called
  * once per connection by `GmailSyncScheduler`, which is responsible for
@@ -48,11 +54,13 @@ export class GmailSyncOrchestrator {
     private readonly processedEmailRepository: ProcessedEmailRepository,
     private readonly duplicateDetector: DuplicateDetectorService,
     private readonly transactionsService: TransactionsService,
-    private readonly salaryService: SalaryService,
   ) {}
 
-  async syncConnection(connection: GmailConnection): Promise<void> {
+  async syncConnection(
+    connection: GmailConnection,
+  ): Promise<SyncConnectionResult> {
     const now = new Date();
+    let transactionsCreated = 0;
     const senders =
       await this.financialInstitutionsService.findActiveSendersForUser(
         connection.userId,
@@ -83,33 +91,41 @@ export class GmailSyncOrchestrator {
       );
 
       for (const { id: messageId } of messageIds) {
-        await this.processMessage(
+        const created = await this.processMessage(
           connection.userId,
           messageId,
           accessToken,
           sendersByEmail,
           connection.lastSyncAt,
         );
+        if (created) {
+          transactionsCreated += 1;
+        }
       }
     }
 
     await this.gmailOAuthService.markSynced(connection.userId, now);
+
+    return { transactionsCreated };
   }
 
+  /** Returns `true` only when this message resulted in a new
+   * `reviewStatus: PendingReview` `Transaction` (i.e. `handleExpense`'s
+   * success path) — the one outcome `GmailSyncScheduler` notifies about. */
   private async processMessage(
     userId: number,
     messageId: string,
     accessToken: string,
     sendersByEmail: Map<string, SenderWithInstitution>,
     lastSyncAt: Date | null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const alreadyProcessed =
       await this.processedEmailRepository.findByUserAndMessage(
         userId,
         messageId,
       );
     if (alreadyProcessed) {
-      return;
+      return false;
     }
 
     let senderEmail: string | null = null;
@@ -127,7 +143,7 @@ export class GmailSyncOrchestrator {
       if (lastSyncAt) {
         const internalDate = new Date(Number(message.internalDate));
         if (internalDate.getTime() <= lastSyncAt.getTime()) {
-          return;
+          return false;
         }
       }
 
@@ -140,7 +156,7 @@ export class GmailSyncOrchestrator {
           result: ProcessedEmailResult.Ignored,
           reason: PROCESSED_EMAIL_REASONS.SENDER_NOT_CONFIGURED,
         });
-        return;
+        return false;
       }
 
       const parser = getBankParser(sender.institution.parserKey);
@@ -152,7 +168,7 @@ export class GmailSyncOrchestrator {
           result: ProcessedEmailResult.Ignored,
           reason: PROCESSED_EMAIL_REASONS.NO_PARSER_CONFIGURED,
         });
-        return;
+        return false;
       }
 
       // text/plain first, falling back to text/html converted to text —
@@ -171,7 +187,7 @@ export class GmailSyncOrchestrator {
           reason: PROCESSED_EMAIL_REASONS.NOT_FINANCIAL,
           parserVersion: parser.version,
         });
-        return;
+        return false;
       }
 
       const parsed = parseResult as ParsedBankEmail;
@@ -188,11 +204,11 @@ export class GmailSyncOrchestrator {
           ),
           parserVersion: parser.version,
         });
-        return;
+        return false;
       }
 
       if (transactionKind.kind === 'expense') {
-        await this.handleExpense(
+        return this.handleExpense(
           userId,
           messageId,
           senderEmail,
@@ -200,17 +216,10 @@ export class GmailSyncOrchestrator {
           sender.institution.id,
           parsed,
         );
-        return;
       }
 
-      await this.handleIncome(
-        userId,
-        messageId,
-        senderEmail,
-        parser.version,
-        sender.institution.id,
-        parsed,
-      );
+      await this.handleIncome(userId, messageId, senderEmail, parser.version);
+      return false;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(
@@ -223,6 +232,7 @@ export class GmailSyncOrchestrator {
         result: ProcessedEmailResult.Failed,
         reason: PROCESSED_EMAIL_REASONS.processingFailed(message),
       });
+      return false;
     }
   }
 
@@ -233,7 +243,7 @@ export class GmailSyncOrchestrator {
     parserVersion: string,
     institutionId: number,
     parsed: ParsedBankEmail,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const duplicate = await this.duplicateDetector.findManualDuplicate(
       userId,
       parsed.amount,
@@ -255,7 +265,7 @@ export class GmailSyncOrchestrator {
         parsedDate: parsed.date,
         parsedDescription: parsed.notes,
       });
-      return;
+      return false;
     }
 
     const created = await this.transactionsService.createFromGmail(userId, {
@@ -274,30 +284,31 @@ export class GmailSyncOrchestrator {
       parserVersion,
       relatedTransactionId: created.id,
     });
+    return true;
   }
 
+  /**
+   * Product decision: income is always entered manually, never
+   * auto-created from a detected email — see `handleExpense` for the
+   * equivalent expense path, which does create a `Transaction`. No
+   * `{TIPO}` currently maps to `kind: 'income'` in
+   * `transaction-type-mapping.ts`, so this is unreached in practice today;
+   * it exists so that whoever adds the first income-mapped type doesn't
+   * have to rediscover this decision.
+   */
   private async handleIncome(
     userId: number,
     messageId: string,
     senderEmail: string | null,
     parserVersion: string,
-    institutionId: number,
-    parsed: ParsedBankEmail,
   ): Promise<void> {
-    const created = await this.salaryService.createFromGmail(userId, {
-      amount: parsed.amount,
-      date: parsed.date,
-      institutionId,
-      gmailMessageId: messageId,
-    });
-
     await this.recordOutcome({
       userId,
       gmailMessageId: messageId,
       senderEmail,
-      result: ProcessedEmailResult.Created,
+      result: ProcessedEmailResult.Ignored,
+      reason: PROCESSED_EMAIL_REASONS.INCOME_DETECTION_DISABLED,
       parserVersion,
-      relatedSalaryId: created.id,
     });
   }
 

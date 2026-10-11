@@ -8,6 +8,8 @@ export const PROCESSED_EMAIL_REASONS = {
   NO_PARSER_CONFIGURED: 'sin parser configurado',
   NOT_FINANCIAL: 'correo no financiero',
   POSSIBLE_DUPLICATE: 'posible duplicado de un movimiento manual',
+  INCOME_DETECTION_DISABLED:
+    'detección automática de ingresos deshabilitada — se ingresan manualmente',
   unknownTransactionType: (transactionType: string) =>
     `tipo de transacción desconocido: ${transactionType}`,
   processingFailed: (message: string) =>
