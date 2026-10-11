@@ -99,6 +99,11 @@ export class PeriodsService {
     const budgeted = distributeIncomeByCategory(periodIncomes, strategy);
     const spentByCategory = periodTransactions.reduce(
       (acc, transaction) => {
+        // Gmail-detected transactions pending classification have no
+        // category yet; they don't count toward any bucket until classified.
+        if (!transaction.category) {
+          return acc;
+        }
         const key = CATEGORY_TO_BUDGET_KEY[transaction.category];
         acc[key] += transaction.amount;
         return acc;
