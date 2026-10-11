@@ -3,6 +3,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { User } from '@prisma/client';
 
+export interface NotificationEmailContent {
+  subject: string;
+  body: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
+}
+
 @Injectable()
 export class MailService {
   #logger = new Logger(MailService.name);
@@ -35,6 +42,29 @@ export class MailService {
       context: {
         userName: user.username,
         resetPasswordLink,
+      },
+    });
+  }
+
+  /**
+   * Generic transactional notification email — backs
+   * `MailNotificationProvider` (see `src/module/notifications`). Deliberately
+   * one shared template (`notification.hbs`) rather than one per
+   * `NotificationType`, since every notification is "heading + body +
+   * optional CTA link" today; add a dedicated template only if a future
+   * notification type needs materially different layout.
+   */
+  async sendNotificationEmail(user: User, content: NotificationEmailContent) {
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: content.subject,
+      template: './notification',
+      context: {
+        userName: user.firstName || user.username,
+        heading: content.subject,
+        body: content.body,
+        ctaUrl: content.ctaUrl,
+        ctaLabel: content.ctaLabel,
       },
     });
   }
