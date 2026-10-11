@@ -111,7 +111,7 @@ describe('GmailSyncOrchestrator', () => {
     gmailApiClient.listMessageIds.mockResolvedValue([{ id: 'msg-1' }]);
     gmailApiClient.getMessage.mockResolvedValue(buildRecargaMessage());
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(transactionsService.createFromGmail).toHaveBeenCalledWith(
       7,
@@ -133,6 +133,27 @@ describe('GmailSyncOrchestrator', () => {
       7,
       expect.any(Date),
     );
+    // Drives GmailSyncScheduler's decision to notify the user — see
+    // notifications module.
+    expect(result).toEqual({ transactionsCreated: 1 });
+  });
+
+  it('counts one transaction per message created across a batch of several messages', async () => {
+    gmailApiClient.listMessageIds.mockResolvedValue([
+      { id: 'msg-1' },
+      { id: 'msg-2' },
+    ]);
+    gmailApiClient.getMessage
+      .mockResolvedValueOnce(buildRecargaMessage({ messageId: 'msg-1' }))
+      .mockResolvedValueOnce(buildRecargaMessage({ messageId: 'msg-2' }));
+    transactionsService.createFromGmail
+      .mockResolvedValueOnce({ id: 100 })
+      .mockResolvedValueOnce({ id: 101 });
+
+    const result = await orchestrator.syncConnection(connection);
+
+    expect(transactionsService.createFromGmail).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ transactionsCreated: 2 });
   });
 
   it('a recarga that matches an existing manual transaction is PossibleDuplicate and creates nothing', async () => {
@@ -140,7 +161,7 @@ describe('GmailSyncOrchestrator', () => {
     gmailApiClient.getMessage.mockResolvedValue(buildRecargaMessage());
     duplicateDetector.findManualDuplicate.mockResolvedValue({ id: 555 });
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
     expect(processedEmailRepository.create).toHaveBeenCalledWith(
@@ -149,6 +170,7 @@ describe('GmailSyncOrchestrator', () => {
         relatedTransactionId: 555,
       }),
     );
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('an unmapped transaction type is NeedsReview and creates nothing', async () => {
@@ -169,7 +191,7 @@ describe('GmailSyncOrchestrator', () => {
     gmailApiClient.listMessageIds.mockResolvedValue([{ id: 'msg-1' }]);
     gmailApiClient.getMessage.mockResolvedValue(message);
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
     expect(processedEmailRepository.create).toHaveBeenCalledWith(
@@ -178,6 +200,7 @@ describe('GmailSyncOrchestrator', () => {
         reason: expect.stringContaining('Transferencia'),
       }),
     );
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('an email from an unconfigured sender is Ignored and creates nothing', async () => {
@@ -210,22 +233,24 @@ describe('GmailSyncOrchestrator', () => {
       result: ProcessedEmailResult.Created,
     });
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(gmailApiClient.getMessage).not.toHaveBeenCalled();
     expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
     expect(processedEmailRepository.create).not.toHaveBeenCalled();
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('skips the whole user without throwing when there are no active senders configured', async () => {
     financialInstitutionsService.findActiveSendersForUser.mockResolvedValue([]);
 
-    await orchestrator.syncConnection(connection);
+    const result = await orchestrator.syncConnection(connection);
 
     expect(gmailApiClient.listMessageIds).not.toHaveBeenCalled();
     expect(gmailOAuthService.markSynced).toHaveBeenCalledWith(
       7,
       expect.any(Date),
     );
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 });

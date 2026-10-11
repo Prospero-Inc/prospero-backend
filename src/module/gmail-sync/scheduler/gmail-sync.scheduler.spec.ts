@@ -1,22 +1,28 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GmailSyncScheduler } from './gmail-sync.scheduler';
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
+import { NotificationsService } from 'src/module/notifications/services/notifications.service';
 import { GmailSyncOrchestrator } from '../services/gmail-sync-orchestrator.service';
 
 describe('GmailSyncScheduler', () => {
   let scheduler: GmailSyncScheduler;
   let gmailOAuthService: { listConnectionsForAutoSync: jest.Mock };
   let orchestrator: { syncConnection: jest.Mock };
+  let notificationsService: { notifyGmailReviewPending: jest.Mock };
 
   beforeEach(async () => {
     gmailOAuthService = { listConnectionsForAutoSync: jest.fn() };
     orchestrator = { syncConnection: jest.fn() };
+    notificationsService = {
+      notifyGmailReviewPending: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GmailSyncScheduler,
         { provide: GmailOAuthService, useValue: gmailOAuthService },
         { provide: GmailSyncOrchestrator, useValue: orchestrator },
+        { provide: NotificationsService, useValue: notificationsService },
       ],
     }).compile();
 
@@ -26,7 +32,7 @@ describe('GmailSyncScheduler', () => {
   it('syncs every connected, auto-detect-enabled connection', async () => {
     const connections = [{ userId: 1 }, { userId: 2 }];
     gmailOAuthService.listConnectionsForAutoSync.mockResolvedValue(connections);
-    orchestrator.syncConnection.mockResolvedValue(undefined);
+    orchestrator.syncConnection.mockResolvedValue({ transactionsCreated: 0 });
 
     await scheduler.handleHourlySync();
 
@@ -40,11 +46,52 @@ describe('GmailSyncScheduler', () => {
     gmailOAuthService.listConnectionsForAutoSync.mockResolvedValue(connections);
     orchestrator.syncConnection
       .mockRejectedValueOnce(new Error('token revoked'))
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce({ transactionsCreated: 0 })
+      .mockResolvedValueOnce({ transactionsCreated: 0 });
 
     await expect(scheduler.handleHourlySync()).resolves.toBeUndefined();
 
     expect(orchestrator.syncConnection).toHaveBeenCalledTimes(3);
+  });
+
+  it('notifies the user when a sync pass creates new pending-review transactions', async () => {
+    const connections = [{ userId: 1 }];
+    gmailOAuthService.listConnectionsForAutoSync.mockResolvedValue(connections);
+    orchestrator.syncConnection.mockResolvedValue({ transactionsCreated: 3 });
+
+    await scheduler.handleHourlySync();
+
+    expect(notificationsService.notifyGmailReviewPending).toHaveBeenCalledWith(
+      1,
+      3,
+    );
+  });
+
+  it('does not notify when a sync pass creates no new transactions', async () => {
+    const connections = [{ userId: 1 }];
+    gmailOAuthService.listConnectionsForAutoSync.mockResolvedValue(connections);
+    orchestrator.syncConnection.mockResolvedValue({ transactionsCreated: 0 });
+
+    await scheduler.handleHourlySync();
+
+    expect(
+      notificationsService.notifyGmailReviewPending,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('a notification-dispatch failure for one user does not abort the rest of the batch', async () => {
+    const connections = [{ userId: 1 }, { userId: 2 }];
+    gmailOAuthService.listConnectionsForAutoSync.mockResolvedValue(connections);
+    orchestrator.syncConnection.mockResolvedValue({ transactionsCreated: 1 });
+    notificationsService.notifyGmailReviewPending
+      .mockRejectedValueOnce(new Error('smtp down'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(scheduler.handleHourlySync()).resolves.toBeUndefined();
+
+    expect(orchestrator.syncConnection).toHaveBeenCalledTimes(2);
+    expect(notificationsService.notifyGmailReviewPending).toHaveBeenCalledTimes(
+      2,
+    );
   });
 });
