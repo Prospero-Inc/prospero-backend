@@ -255,9 +255,9 @@ model ProcessedEmail {
   parsedDate           DateTime?            @map("parsed_date")
   parsedDescription    String?              @map("parsed_description")
   // Set once the user has acted on a PossibleDuplicate (via "create
-  // anyway" or, in the future, an explicit dismiss) so the
-  // possibleGmailDuplicate badge on the related transaction stops
-  // appearing. Null means "still awaiting user action".
+  // anyway" or "dismiss") so the possibleGmailDuplicate badge on the
+  // related transaction stops appearing. Null means "still awaiting user
+  // action".
   resolvedAt           DateTime?            @map("resolved_at")
   processedAt          DateTime             @default(now()) @map("processed_at")
 
