@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
+import { NotificationsService } from 'src/module/notifications/services/notifications.service';
 import { GmailSyncOrchestrator } from '../services/gmail-sync-orchestrator.service';
 
 /**
@@ -15,6 +16,7 @@ export class GmailSyncScheduler {
   constructor(
     private readonly gmailOAuthService: GmailOAuthService,
     private readonly orchestrator: GmailSyncOrchestrator,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Cron('0 * * * *')
@@ -24,7 +26,14 @@ export class GmailSyncScheduler {
 
     for (const connection of connections) {
       try {
-        await this.orchestrator.syncConnection(connection);
+        const { transactionsCreated } =
+          await this.orchestrator.syncConnection(connection);
+        if (transactionsCreated > 0) {
+          await this.notifyReviewPending(
+            connection.userId,
+            transactionsCreated,
+          );
+        }
       } catch (error) {
         // One user's failure (revoked token, Gmail rate limit, transient
         // network error) must never abort the rest of the batch.
@@ -34,6 +43,28 @@ export class GmailSyncScheduler {
           `Gmail sync failed for userId=${connection.userId}: ${message}`,
         );
       }
+    }
+  }
+
+  /** Isolated from the sync try/catch above so a notification-delivery
+   * failure is logged with its own, accurate message rather than being
+   * reported as a sync failure it isn't. `NotificationsService` already
+   * swallows per-provider errors internally; this guards against the
+   * (rarer) case of the dispatch itself throwing, e.g. the user lookup. */
+  private async notifyReviewPending(
+    userId: number,
+    transactionsCreated: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.notifyGmailReviewPending(
+        userId,
+        transactionsCreated,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      this.logger.error(
+        `Failed to notify userId=${userId} about ${transactionsCreated} pending-review transaction(s): ${message}`,
+      );
     }
   }
 }

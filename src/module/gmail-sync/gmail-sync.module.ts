@@ -5,6 +5,7 @@ import { GmailModule } from '../gmail/gmail.module';
 import { FinancialInstitutionsModule } from '../financial-institutions/financial-institutions.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { SalaryModule } from '../salary/salary.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaService } from '../prisma.service';
 import { GmailApiClient } from './services/gmail-api-client.service';
 import { DuplicateDetectorService } from './services/duplicate-detector.service';
@@ -21,7 +22,10 @@ import { GmailSyncController } from './controllers/gmail-sync.controller';
  * registering a `@Cron` job, so `ScheduleModule.forRoot()` lives here rather
  * than in `AppModule`. Also owns `ProcessedEmailsController` (the "create
  * anyway" action on a `ProcessedEmail`) since it's the only consumer of
- * `ProcessedEmailRepository`.
+ * `ProcessedEmailRepository`. Imports `NotificationsModule` so
+ * `GmailSyncScheduler` can notify a user once a sync pass creates new
+ * `PendingReview` transactions — see `NotificationsService.
+ * notifyGmailReviewPending`.
  */
 @Module({
   imports: [
@@ -31,6 +35,7 @@ import { GmailSyncController } from './controllers/gmail-sync.controller';
     FinancialInstitutionsModule,
     TransactionsModule,
     SalaryModule,
+    NotificationsModule,
   ],
   controllers: [ProcessedEmailsController, GmailSyncController],
   providers: [
