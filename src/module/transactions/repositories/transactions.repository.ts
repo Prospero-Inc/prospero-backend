@@ -55,24 +55,42 @@ export class TransactionsRepository {
   }
 
   findManyByUser(userId: number, filters: TransactionFilters = {}) {
-    const { from, to, reviewStatus } = filters;
-
     return this.prisma.transaction.findMany({
-      where: {
-        userId,
-        ...((from || to) && {
-          date: {
-            ...(from && { gte: from }),
-            ...(to && { lte: to }),
-          },
-        }),
-        ...(reviewStatus &&
-          reviewStatus.length > 0 && {
-            reviewStatus: { in: reviewStatus },
-          }),
+      where: this.buildListWhere(userId, filters),
+      orderBy: { date: 'desc' },
+    });
+  }
+
+  /** Same rows as `findManyByUser`, plus the names the `GET /transactions`
+   * list needs to label each row (fixed expense it pays, bank it came
+   * from). Kept separate so internal callers don't pay for the joins. */
+  findManyByUserWithLabels(userId: number, filters: TransactionFilters = {}) {
+    return this.prisma.transaction.findMany({
+      where: this.buildListWhere(userId, filters),
+      include: {
+        fixedExpense: { select: { name: true } },
+        institution: { select: { name: true } },
       },
       orderBy: { date: 'desc' },
     });
+  }
+
+  private buildListWhere(userId: number, filters: TransactionFilters) {
+    const { from, to, reviewStatus } = filters;
+
+    return {
+      userId,
+      ...((from || to) && {
+        date: {
+          ...(from && { gte: from }),
+          ...(to && { lte: to }),
+        },
+      }),
+      ...(reviewStatus &&
+        reviewStatus.length > 0 && {
+          reviewStatus: { in: reviewStatus },
+        }),
+    };
   }
 
   /**

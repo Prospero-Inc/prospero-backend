@@ -113,6 +113,7 @@ model Salary {
   source                  MovementSource        @default(Manual)
   status                  IncomeReviewStatus    @default(Classified)
   incomeCategory          IncomeCategory?       @map("income_category")
+  description             String?
   institutionId           Int?                  @map("institution_id")
   institution             FinancialInstitution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
   gmailMessageId          String?               @map("gmail_message_id")
