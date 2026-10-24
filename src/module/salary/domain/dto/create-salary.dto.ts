@@ -8,6 +8,8 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsString,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateSalaryDto {
@@ -64,4 +66,14 @@ export class CreateSalaryDto {
   @IsOptional()
   @IsBoolean()
   distributeAutomatically?: boolean;
+
+  @ApiProperty({
+    description: 'Concepto libre para identificar el ingreso en el listado',
+    example: 'Quincena octubre',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  description?: string;
 }

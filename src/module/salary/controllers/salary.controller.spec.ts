@@ -44,7 +44,7 @@ describe('SalaryController', () => {
     expect(salaryService.create).toHaveBeenCalledWith(7, dto);
   });
 
-  it('lists salaries scoped to the authenticated user and reverses them to most-recent-first', async () => {
+  it('lists salaries scoped to the authenticated user in the order the service returns (most-recent-first)', async () => {
     const req = { user: { userId: 7 } };
     salaryService.findAllForUserWithPossibleDuplicates.mockResolvedValue([
       { id: 1 },
@@ -56,7 +56,7 @@ describe('SalaryController', () => {
     expect(
       salaryService.findAllForUserWithPossibleDuplicates,
     ).toHaveBeenCalledWith(7, { status: undefined });
-    expect(result).toEqual([{ id: 2 }, { id: 1 }]);
+    expect(result).toEqual([{ id: 1 }, { id: 2 }]);
   });
 
   it('propagates the status filter straight through to the service', async () => {

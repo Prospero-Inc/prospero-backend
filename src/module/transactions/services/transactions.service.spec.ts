@@ -9,6 +9,7 @@ describe('TransactionsService', () => {
   let repository: {
     create: jest.Mock;
     findManyByUser: jest.Mock;
+    findManyByUserWithLabels: jest.Mock;
     findPossibleDuplicatesFor: jest.Mock;
     countByReviewStatus: jest.Mock;
     findOneOwned: jest.Mock;
@@ -20,6 +21,7 @@ describe('TransactionsService', () => {
     repository = {
       create: jest.fn(),
       findManyByUser: jest.fn(),
+      findManyByUserWithLabels: jest.fn(),
       findPossibleDuplicatesFor: jest.fn().mockResolvedValue([]),
       countByReviewStatus: jest.fn(),
       findOneOwned: jest.fn(),
@@ -121,7 +123,7 @@ describe('TransactionsService', () => {
       source: MovementSource.Manual,
       amount: 1.5,
     };
-    repository.findManyByUser.mockResolvedValue([manualTransaction]);
+    repository.findManyByUserWithLabels.mockResolvedValue([manualTransaction]);
     repository.findPossibleDuplicatesFor.mockResolvedValue([
       {
         relatedTransactionId: 10,
@@ -136,6 +138,8 @@ describe('TransactionsService', () => {
     expect(result).toEqual([
       {
         ...manualTransaction,
+        fixedExpenseName: null,
+        institutionName: null,
         possibleGmailDuplicate: {
           senderEmail: 'alertas@bancoagricola.com',
           processedAt: new Date('2026-10-07T17:23:44.000Z'),
@@ -151,13 +155,46 @@ describe('TransactionsService', () => {
       source: MovementSource.Gmail,
       amount: 25,
     };
-    repository.findManyByUser.mockResolvedValue([gmailTransaction]);
+    repository.findManyByUserWithLabels.mockResolvedValue([gmailTransaction]);
 
     const result = await service.findAllForUserWithPossibleDuplicates(5);
 
     expect(repository.findPossibleDuplicatesFor).toHaveBeenCalledWith([]);
     expect(result).toEqual([
-      { ...gmailTransaction, possibleGmailDuplicate: null },
+      {
+        ...gmailTransaction,
+        fixedExpenseName: null,
+        institutionName: null,
+        possibleGmailDuplicate: null,
+      },
+    ]);
+  });
+
+  it('findAllForUserWithPossibleDuplicates flattens the fixed expense and bank names into list labels', async () => {
+    repository.findManyByUserWithLabels.mockResolvedValue([
+      {
+        id: 13,
+        userId: 5,
+        source: MovementSource.Gmail,
+        amount: 30,
+        fixedExpense: { name: 'Internet' },
+        institution: { name: 'Banco Agrícola' },
+      },
+    ]);
+    repository.findPossibleDuplicatesFor.mockResolvedValue([]);
+
+    const result = await service.findAllForUserWithPossibleDuplicates(5);
+
+    expect(result).toEqual([
+      {
+        id: 13,
+        userId: 5,
+        source: MovementSource.Gmail,
+        amount: 30,
+        fixedExpenseName: 'Internet',
+        institutionName: 'Banco Agrícola',
+        possibleGmailDuplicate: null,
+      },
     ]);
   });
 
@@ -168,13 +205,18 @@ describe('TransactionsService', () => {
       source: MovementSource.Manual,
       amount: 42,
     };
-    repository.findManyByUser.mockResolvedValue([manualTransaction]);
+    repository.findManyByUserWithLabels.mockResolvedValue([manualTransaction]);
     repository.findPossibleDuplicatesFor.mockResolvedValue([]);
 
     const result = await service.findAllForUserWithPossibleDuplicates(5);
 
     expect(result).toEqual([
-      { ...manualTransaction, possibleGmailDuplicate: null },
+      {
+        ...manualTransaction,
+        fixedExpenseName: null,
+        institutionName: null,
+        possibleGmailDuplicate: null,
+      },
     ]);
   });
 
