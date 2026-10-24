@@ -2,6 +2,9 @@ import { PayFrequency, PeriodOverride } from '@prisma/client';
 import {
   computePeriods,
   estimateNextPaymentDate,
+  findPeriodByKey,
+  INITIAL_PERIOD_KEY,
+  periodKey,
   resolvePeriodForDate,
   resolveTransactionPeriod,
 } from './period.util';
@@ -114,5 +117,23 @@ describe('estimateNextPaymentDate', () => {
     expect(
       estimateNextPaymentDate(d('2026-01-31'), PayFrequency.Monthly),
     ).toEqual(d('2026-02-28'));
+  });
+});
+
+describe('periodKey / findPeriodByKey', () => {
+  const periods = computePeriods([d('2026-09-14'), d('2026-09-26')]);
+
+  it('keys dated periods by their start date and the first one as initial', () => {
+    expect(periods.map(periodKey)).toEqual([
+      INITIAL_PERIOD_KEY,
+      '2026-09-14',
+      '2026-09-26',
+    ]);
+  });
+
+  it('finds a period by its key and returns undefined for an unknown one', () => {
+    expect(findPeriodByKey(periods, '2026-09-14')?.index).toBe(1);
+    expect(findPeriodByKey(periods, INITIAL_PERIOD_KEY)?.index).toBe(0);
+    expect(findPeriodByKey(periods, '2026-09-15')).toBeUndefined();
   });
 });

@@ -95,6 +95,31 @@ export function resolvePeriodForDate(
   return match ?? periods[periods.length - 1];
 }
 
+/** Key for the period before the first payroll — the only one with no
+ * startDate, so it can't be keyed by date. */
+export const INITIAL_PERIOD_KEY = 'initial';
+
+/**
+ * Stable, URL-safe identifier for a period: its start date (YYYY-MM-DD), or
+ * `INITIAL_PERIOD_KEY`. Indexes aren't used because they shift whenever an
+ * earlier payroll is added, which would silently change what a saved
+ * `?period=` link points at.
+ */
+export function periodKey(period: ComputedPeriod): string {
+  return period.startDate
+    ? period.startDate.toISOString().slice(0, 10)
+    : INITIAL_PERIOD_KEY;
+}
+
+/** The period with that key, or `undefined` if it doesn't exist (e.g. the
+ * payroll that started it was deleted). */
+export function findPeriodByKey(
+  periods: ComputedPeriod[],
+  key: string,
+): ComputedPeriod | undefined {
+  return periods.find((period) => periodKey(period) === key);
+}
+
 /**
  * Resolves the period a transaction actually belongs to, applying its manual
  * override (if any) instead of the plain date-based lookup.

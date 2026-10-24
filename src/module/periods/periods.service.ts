@@ -1,14 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { differenceInCalendarDays } from 'date-fns';
 import { IncomeType, Salary, Transaction } from '@prisma/client';
 import { UserService } from '../user/user.service';
-import { SalaryService } from '../salary/services/salary.service';
-import { TransactionsService } from '../transactions/services/transactions.service';
+import {
+  SalaryService,
+  SalaryWithPossibleDuplicate,
+} from '../salary/services/salary.service';
+import {
+  TransactionsService,
+  TransactionWithPossibleDuplicate,
+} from '../transactions/services/transactions.service';
 import { CustomStrategy } from '../salary/strategies/custom.strategy';
 import {
   ComputedPeriod,
   computePeriods,
   estimateNextPaymentDate,
+  findPeriodByKey,
+  periodKey,
   resolvePeriodForDate,
   resolveTransactionPeriod,
 } from './period.util';
@@ -18,6 +26,8 @@ import {
 } from './income-distribution.util';
 
 export interface PeriodSummary {
+  /** See `periodKey`: what `?period=` expects on the movement endpoints. */
+  key: string;
   startDate: Date | null;
   endDate: Date | null;
   isOpen: boolean;
@@ -49,16 +59,32 @@ export class PeriodsService {
       this.transactionsService.findAllForUser(userId),
     ]);
 
-    const payrollDates = salaries
-      .filter((salary) => salary.type === IncomeType.Payroll)
-      .map((salary) => salary.date);
-
     return {
       user,
       salaries,
       transactions,
-      periods: computePeriods(payrollDates),
+      periods: this.computeUserPeriods(salaries),
     };
+  }
+
+  private computeUserPeriods(salaries: Salary[]): ComputedPeriod[] {
+    return computePeriods(
+      salaries
+        .filter((salary) => salary.type === IncomeType.Payroll)
+        .map((salary) => salary.date),
+    );
+  }
+
+  /** `key` omitted → the current (open) period. */
+  private selectPeriod(periods: ComputedPeriod[], key?: string) {
+    if (!key) {
+      return periods[periods.length - 1];
+    }
+    const period = findPeriodByKey(periods, key);
+    if (!period) {
+      throw new NotFoundException('Period not found');
+    }
+    return period;
   }
 
   private summarizePeriod(
@@ -135,6 +161,7 @@ export class PeriodsService {
       : null;
 
     return {
+      key: periodKey(period),
       startDate: period.startDate,
       endDate: period.endDate,
       isOpen: period.isOpen,
@@ -196,5 +223,45 @@ export class PeriodsService {
           user.payFrequency,
         ),
       );
+  }
+
+  /** Same rows (and shape) as `GET /transactions`, limited to the ones that
+   * count toward the given period — `periodOverride` included, exactly as
+   * `summarizePeriod` assigns them, so the list adds up to the dashboard. */
+  async listTransactionsForPeriod(
+    userId: number,
+    key?: string,
+  ): Promise<TransactionWithPossibleDuplicate[]> {
+    const [salaries, transactions] = await Promise.all([
+      this.salaryService.findAllForUser(userId),
+      this.transactionsService.findAllForUserWithPossibleDuplicates(userId),
+    ]);
+    const periods = this.computeUserPeriods(salaries);
+    const target = this.selectPeriod(periods, key);
+
+    return transactions.filter(
+      (transaction) =>
+        resolveTransactionPeriod(
+          periods,
+          transaction.date,
+          transaction.periodOverride,
+        ).index === target.index,
+    );
+  }
+
+  /** Same rows (and shape) as `GET /salary`, limited to the given period. */
+  async listSalariesForPeriod(
+    userId: number,
+    key?: string,
+  ): Promise<SalaryWithPossibleDuplicate[]> {
+    const salaries =
+      await this.salaryService.findAllForUserWithPossibleDuplicates(userId);
+    const periods = this.computeUserPeriods(salaries);
+    const target = this.selectPeriod(periods, key);
+
+    return salaries.filter(
+      (salary) =>
+        resolvePeriodForDate(periods, salary.date).index === target.index,
+    );
   }
 }
