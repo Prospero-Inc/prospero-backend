@@ -121,7 +121,7 @@ describe('AgricolaEmailParser', () => {
     const result = parser.parse(syntheticEmail) as ParsedBankEmail;
 
     // The parser's job stops at extracting fields — it never decides
-    // income/expense itself (that's transaction-type-mapping.ts), so an
+    // income/expense itself (that's its `transactionKinds`), so an
     // unmapped type must still come back as a plain ParsedBankEmail, with no
     // `kind` property anywhere on it.
     expect(result).not.toHaveProperty('kind');

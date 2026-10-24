@@ -104,7 +104,7 @@ export class SalaryService {
    * never `Payroll`: a Payroll-type Salary opens/anchors a budget period
    * (see `periods.service.ts`), and we never want an unreviewed, possibly
    * misparsed detection to silently move the user's period boundaries.
-   * Nothing maps to `kind: 'income'` in `transaction-type-mapping.ts` yet,
+   * Nothing maps to `kind: 'income'` in any parser's `transactionKinds` yet,
    * so this path is implemented but currently unreachable in production.
    */
   createFromGmail(

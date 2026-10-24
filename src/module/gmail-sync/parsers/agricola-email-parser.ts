@@ -2,6 +2,7 @@ import {
   BankEmailParseResult,
   BankEmailParser,
 } from './bank-email-parser.interface';
+import { TransactionKindMapping } from './transaction-type-mapping';
 
 /** Marks the start of the structured block every Banco Agrícola transaction
  * confirmation email shares, regardless of `{TIPO}`. */
@@ -64,6 +65,12 @@ function parseAmount(blockText: string): number {
  */
 export class AgricolaEmailParser implements BankEmailParser {
   readonly version = 'agricola-v1';
+
+  /** "Compra"/"Transferencia" intentionally absent: no real sample yet, and
+   * this bank may not even email those. */
+  readonly transactionKinds: TransactionKindMapping = {
+    'Recarga de Celular': { kind: 'expense' },
+  };
 
   parse(bodyText: string): BankEmailParseResult {
     const headerMatch = bodyText.match(OPERATION_HEADER_REGEX);

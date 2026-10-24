@@ -191,7 +191,10 @@ export class GmailSyncOrchestrator {
       }
 
       const parsed = parseResult as ParsedBankEmail;
-      const transactionKind = resolveTransactionKind(parsed.transactionType);
+      const transactionKind = resolveTransactionKind(
+        parser.transactionKinds,
+        parsed.transactionType,
+      );
 
       if (!transactionKind) {
         await this.recordOutcome({
@@ -291,8 +294,8 @@ export class GmailSyncOrchestrator {
    * Product decision: income is always entered manually, never
    * auto-created from a detected email — see `handleExpense` for the
    * equivalent expense path, which does create a `Transaction`. No
-   * `{TIPO}` currently maps to `kind: 'income'` in
-   * `transaction-type-mapping.ts`, so this is unreached in practice today;
+   * `{TIPO}` currently maps to `kind: 'income'` in any parser's
+   * `transactionKinds`, so this is unreached in practice today;
    * it exists so that whoever adds the first income-mapped type doesn't
    * have to rediscover this decision.
    */
