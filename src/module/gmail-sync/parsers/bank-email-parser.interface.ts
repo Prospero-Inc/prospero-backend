@@ -1,3 +1,5 @@
+import { TransactionKindMapping } from './transaction-type-mapping';
+
 /**
  * Structured result of successfully parsing a bank transaction-confirmation
  * email. Deliberately does not carry a `merchant`/`comercio` field: per the
@@ -7,11 +9,12 @@
  */
 export interface ParsedBankEmail {
   /** Raw `{TIPO}` string as it appears in the email, e.g. "Recarga de Celular".
-   * Never normalized/guessed here — `transaction-type-mapping.ts` is the only
-   * place that decides what a given type means. */
+   * Never normalized/guessed here — the parser's own `transactionKinds` is
+   * the only place that decides what a given type means. */
   transactionType: string;
-  /** Bank-issued operation id ("ID" field), kept for audit/support purposes. */
-  externalId: string;
+  /** Bank-issued operation id ("ID" field), kept for audit/support purposes.
+   * Optional: some banks (BAC Credomatic) don't include one. */
+  externalId?: string;
   /** Transaction date+time as reported by the bank. */
   date: Date;
   /** Amount in the bank's base currency (USD for Banco Agrícola). Always the
@@ -41,6 +44,9 @@ export interface BankEmailParser {
   /** Stable identifier persisted on `ProcessedEmail.parserVersion` for audit
    * trail — bump it whenever the parsing rules change meaningfully. */
   readonly version: string;
+  /** This bank's `{TIPO}` → income/expense table. Per bank, not global: two
+   * banks can use the same word for different things. */
+  readonly transactionKinds: TransactionKindMapping;
 
   parse(bodyText: string): BankEmailParseResult;
 }

@@ -19,7 +19,7 @@ export interface SalaryFilters {
  * at a given salary row. Implemented for schema consistency with
  * transactions (see `TransactionsRepository.findPossibleDuplicatesFor`) —
  * currently dead code in production since no parsed transaction type maps
- * to `kind: 'income'` yet (`transaction-type-mapping.ts`), so this list is
+ * to `kind: 'income'` yet (no parser's `transactionKinds`), so this list is
  * always empty today. */
 export interface SalaryPossibleDuplicateRow {
   id: number;

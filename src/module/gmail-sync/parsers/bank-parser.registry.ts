@@ -1,5 +1,6 @@
 import { BankEmailParser } from './bank-email-parser.interface';
 import { AgricolaEmailParser } from './agricola-email-parser';
+import { BacEmailParser } from './bac-email-parser';
 
 export interface SupportedParserInfo {
   key: string;
@@ -14,6 +15,7 @@ export interface SupportedParserInfo {
  */
 export const BANK_PARSER_REGISTRY: Record<string, BankEmailParser> = {
   banco_agricola: new AgricolaEmailParser(),
+  bac_credomatic: new BacEmailParser(),
 };
 
 /**
@@ -23,6 +25,7 @@ export const BANK_PARSER_REGISTRY: Record<string, BankEmailParser> = {
  */
 export const SUPPORTED_PARSERS: SupportedParserInfo[] = [
   { key: 'banco_agricola', label: 'Banco Agrícola' },
+  { key: 'bac_credomatic', label: 'BAC Credomatic' },
 ];
 
 export const SUPPORTED_PARSER_KEYS: string[] = SUPPORTED_PARSERS.map(
