@@ -10,6 +10,7 @@ describe('SalaryService', () => {
   let repository: {
     create: jest.Mock;
     findManyByUser: jest.Mock;
+    findManyByUserWithLabels: jest.Mock;
     findPossibleDuplicatesFor: jest.Mock;
     countByStatus: jest.Mock;
     findOneOwned: jest.Mock;
@@ -21,6 +22,7 @@ describe('SalaryService', () => {
     repository = {
       create: jest.fn(),
       findManyByUser: jest.fn(),
+      findManyByUserWithLabels: jest.fn(),
       findPossibleDuplicatesFor: jest.fn().mockResolvedValue([]),
       countByStatus: jest.fn(),
       findOneOwned: jest.fn(),
@@ -122,7 +124,9 @@ describe('SalaryService', () => {
       source: MovementSource.Manual,
       amount: 500,
     };
-    repository.findManyByUser.mockResolvedValue([manualSalary]);
+    repository.findManyByUserWithLabels.mockResolvedValue([
+      { ...manualSalary, institution: { name: 'Banco Agrícola' } },
+    ]);
     repository.findPossibleDuplicatesFor.mockResolvedValue([
       {
         relatedSalaryId: 20,
@@ -137,6 +141,7 @@ describe('SalaryService', () => {
     expect(result).toEqual([
       {
         ...manualSalary,
+        institutionName: 'Banco Agrícola',
         possibleGmailDuplicate: {
           senderEmail: 'alertas@bancoagricola.com',
           processedAt: new Date('2026-10-07T17:23:44.000Z'),

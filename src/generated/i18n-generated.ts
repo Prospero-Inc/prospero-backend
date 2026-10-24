@@ -42,6 +42,7 @@ export type I18nTranslations = {
         "INVALID_BOOLEAN": string;
         "MIN": string;
         "MAX": string;
+        "INVALID_PERIOD": string;
     };
 };
 /* prettier-ignore */

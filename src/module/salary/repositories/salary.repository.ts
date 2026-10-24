@@ -41,6 +41,7 @@ export class SalaryRepository {
         type: data.type,
         budgetCategory: data.budgetCategory,
         distributeAutomatically: data.distributeAutomatically,
+        description: data.description,
       },
     });
   }
@@ -71,6 +72,22 @@ export class SalaryRepository {
         ...(status && status.length > 0 && { status: { in: status } }),
       },
       orderBy: { date: 'asc' },
+    });
+  }
+
+  /** `GET /salary` list: newest first (left out of `findManyByUser` so
+   * `periods`/`fixed-expenses` keep their ascending order), plus the bank
+   * name for labeling. */
+  findManyByUserWithLabels(userId: number, filters: SalaryFilters = {}) {
+    const { status } = filters;
+
+    return this.prisma.salary.findMany({
+      where: {
+        userId,
+        ...(status && status.length > 0 && { status: { in: status } }),
+      },
+      include: { institution: { select: { name: true } } },
+      orderBy: { date: 'desc' },
     });
   }
 

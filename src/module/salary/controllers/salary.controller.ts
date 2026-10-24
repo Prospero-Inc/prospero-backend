@@ -66,13 +66,12 @@ export class SalaryController {
 
   @Get()
   @ApiOperation({ summary: 'Listar todos los ingresos del usuario' })
-  async findAll(@Request() req, @Query() query: FindSalaryQueryDto) {
-    const salaries =
-      await this.salaryService.findAllForUserWithPossibleDuplicates(
-        req.user.userId,
-        { status: query.status },
-      );
-    return [...salaries].reverse();
+  findAll(@Request() req, @Query() query: FindSalaryQueryDto) {
+    // Already most-recent-first: see SalaryRepository.findManyByUserWithLabels.
+    return this.salaryService.findAllForUserWithPossibleDuplicates(
+      req.user.userId,
+      { status: query.status },
+    );
   }
 
   @Patch(':id')

@@ -3,5 +3,6 @@
     "INVALID_EMAIL": "email is invalid",
     "INVALID_BOOLEAN": "{property} is not a boolean",
     "MIN": "{property} with value: \"{value}\" needs to be at least {constraints.0}, ow and {message}",
-    "MAX": "{property} with value: \"{value}\" needs to be less than {constraints.0}, ow and {message}"
+    "MAX": "{property} with value: \"{value}\" needs to be less than {constraints.0}, ow and {message}",
+    "INVALID_PERIOD": "{property} must be a period start date (YYYY-MM-DD) or \"initial\""
   }

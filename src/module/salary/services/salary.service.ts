@@ -47,6 +47,8 @@ export const PENDING_REVIEW_INCOME_STATUSES: IncomeReviewStatus[] =
  * though no parser currently maps to `kind: 'income'` (see the repository's
  * `SalaryPossibleDuplicateRow` doc). */
 export interface SalaryWithPossibleDuplicate extends Salary {
+  /** Bank the income was detected from, if any — list label. */
+  institutionName: string | null;
   possibleGmailDuplicate: {
     id: number;
     senderEmail: string;
@@ -122,7 +124,7 @@ export class SalaryService {
     userId: number,
     filters: SalaryFilters = {},
   ): Promise<SalaryWithPossibleDuplicate[]> {
-    const salaries = await this.salaryRepository.findManyByUser(
+    const salaries = await this.salaryRepository.findManyByUserWithLabels(
       userId,
       filters,
     );
@@ -151,8 +153,9 @@ export class SalaryService {
       }
     }
 
-    return salaries.map((salary) => ({
+    return salaries.map(({ institution, ...salary }) => ({
       ...salary,
+      institutionName: institution?.name ?? null,
       possibleGmailDuplicate: duplicateBySalaryId.get(salary.id) ?? null,
     }));
   }

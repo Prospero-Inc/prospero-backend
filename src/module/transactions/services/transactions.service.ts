@@ -49,6 +49,10 @@ export interface UpdateTransactionInput extends UpdateTransactionDto {
  * row, since the Gmail pipeline never flags its own detections as
  * duplicates of themselves). */
 export interface TransactionWithPossibleDuplicate extends Transaction {
+  /** Name of the fixed expense this row pays, if any — list label. */
+  fixedExpenseName: string | null;
+  /** Bank the row was detected from, if any — list label. */
+  institutionName: string | null;
   possibleGmailDuplicate: {
     id: number;
     senderEmail: string;
@@ -100,10 +104,11 @@ export class TransactionsService {
     userId: number,
     filters: TransactionFilters = {},
   ): Promise<TransactionWithPossibleDuplicate[]> {
-    const transactions = await this.transactionsRepository.findManyByUser(
-      userId,
-      filters,
-    );
+    const transactions =
+      await this.transactionsRepository.findManyByUserWithLabels(
+        userId,
+        filters,
+      );
 
     const manualIds = transactions
       .filter((transaction) => transaction.source === MovementSource.Manual)
@@ -134,11 +139,15 @@ export class TransactionsService {
       }
     }
 
-    return transactions.map((transaction) => ({
-      ...transaction,
-      possibleGmailDuplicate:
-        duplicateByTransactionId.get(transaction.id) ?? null,
-    }));
+    return transactions.map(
+      ({ fixedExpense, institution, ...transaction }) => ({
+        ...transaction,
+        fixedExpenseName: fixedExpense?.name ?? null,
+        institutionName: institution?.name ?? null,
+        possibleGmailDuplicate:
+          duplicateByTransactionId.get(transaction.id) ?? null,
+      }),
+    );
   }
 
   /** Cheap count for the `GET /review-queue/summary` badge. */
