@@ -53,6 +53,10 @@ export class UserService {
     }
   }
 
+  /** Stores a *pending* 2FA secret: `enable2FA` is deliberately left as
+   * is. Turning 2FA on here (before the user proved their authenticator
+   * works) locked out anyone who opened the setup screen and left — login
+   * then demanded a code from an app they never configured. */
   async updateSecretKey(id: number, secret: string, qr: string) {
     return await this.prisma.user.update({
       where: {
@@ -60,9 +64,16 @@ export class UserService {
       },
       data: {
         twoFASecret: secret,
-        enable2FA: true,
         qr2FA: qr,
       },
+    });
+  }
+
+  /** Turns 2FA on — only after a code from the pending secret verified. */
+  async confirm2FA(id: number) {
+    return await this.prisma.user.update({
+      where: { id },
+      data: { enable2FA: true },
     });
   }
 
