@@ -16,7 +16,12 @@ jest.mock('speakeasy');
 
 describe('AuthService', () => {
   let service: AuthService;
-  let userService: { findOne: jest.Mock; findById: jest.Mock };
+  let userService: {
+    findOne: jest.Mock;
+    findById: jest.Mock;
+    updateSecretKey: jest.Mock;
+    confirm2FA: jest.Mock;
+  };
   let jwtService: { sign: jest.Mock; verify: jest.Mock };
   let refreshTokenRepository: {
     create: jest.Mock;
@@ -41,7 +46,12 @@ describe('AuthService', () => {
     crypto.createHash('sha256').update(raw).digest('hex');
 
   beforeEach(async () => {
-    userService = { findOne: jest.fn(), findById: jest.fn() };
+    userService = {
+      findOne: jest.fn(),
+      findById: jest.fn(),
+      updateSecretKey: jest.fn(),
+      confirm2FA: jest.fn(),
+    };
     jwtService = { sign: jest.fn(), verify: jest.fn() };
     refreshTokenRepository = {
       create: jest.fn(),
@@ -207,6 +217,75 @@ describe('AuthService', () => {
           username: twoFaUser.username,
         },
       });
+    });
+  });
+
+  describe('2FA setup', () => {
+    it('stores a pending secret without turning 2FA on', async () => {
+      userService.findById.mockResolvedValue({
+        ...activeUser,
+        enable2FA: false,
+      });
+      (speakeasy.generateSecret as jest.Mock).mockReturnValue({
+        base32: 'PENDINGSECRET',
+        otpauth_url: 'otpauth://totp/x',
+      });
+
+      const result = await service.enable2FA(1);
+
+      expect(userService.updateSecretKey).toHaveBeenCalledWith(
+        1,
+        'PENDINGSECRET',
+        'otpauth://totp/x',
+      );
+      expect(userService.confirm2FA).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        secret: 'PENDINGSECRET',
+        qr: 'otpauth://totp/x',
+      });
+    });
+
+    it('turns 2FA on only when the first code verifies', async () => {
+      userService.findById.mockResolvedValue({
+        ...activeUser,
+        enable2FA: false,
+        twoFASecret: 'PENDINGSECRET',
+      });
+      (speakeasy.totp.verify as jest.Mock).mockReturnValue(true);
+
+      await expect(service.validate2FAToken(1, '123456')).resolves.toEqual({
+        verified: true,
+      });
+      expect(userService.confirm2FA).toHaveBeenCalledWith(1);
+    });
+
+    it('leaves 2FA off and reports verified: false on a wrong code', async () => {
+      userService.findById.mockResolvedValue({
+        ...activeUser,
+        enable2FA: false,
+        twoFASecret: 'PENDINGSECRET',
+      });
+      (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
+
+      await expect(service.validate2FAToken(1, '000000')).resolves.toEqual({
+        verified: false,
+      });
+      expect(userService.confirm2FA).not.toHaveBeenCalled();
+    });
+
+    it('reports verified: false when there is no pending secret', async () => {
+      userService.findById.mockResolvedValue({
+        ...activeUser,
+        enable2FA: false,
+        twoFASecret: null,
+      });
+
+      await expect(service.validate2FAToken(1, '123456')).resolves.toEqual({
+        verified: false,
+      });
+      expect(speakeasy.totp.verify).not.toHaveBeenCalledWith(
+        expect.objectContaining({ token: '123456', secret: null }),
+      );
     });
   });
 
