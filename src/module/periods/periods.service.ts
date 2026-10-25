@@ -44,6 +44,26 @@ export interface PeriodSummary {
   recentTransactions: Transaction[];
 }
 
+/** Spec §3.3/§6 "Del mes": calendar-month totals, independent of periods. */
+export interface MonthSummary {
+  /** 1–12. */
+  year: number;
+  month: number;
+  income: number;
+  /** Payroll-type incomes this month: 1 or 3 is normal for biweekly pay
+   * (spec §3.3), so the UI can explain an unusual total. */
+  payrollCount: number;
+  totalSpent: number;
+  balance: number;
+}
+
+/** Stored dates are date-only values at UTC midnight (Gmail ones carry the
+ * bank's literal time as UTC), so a row's calendar month is its UTC one —
+ * the same convention `period.util` uses. */
+function isInMonth(date: Date, year: number, monthIndex: number): boolean {
+  return date.getUTCFullYear() === year && date.getUTCMonth() === monthIndex;
+}
+
 @Injectable()
 export class PeriodsService {
   constructor(
@@ -263,5 +283,45 @@ export class PeriodsService {
       (salary) =>
         resolvePeriodForDate(periods, salary.date).index === target.index,
     );
+  }
+
+  /**
+   * Totals for the calendar month containing `now`. "Which month is it" is
+   * read in the process's local timezone — production sets
+   * `TZ=America/El_Salvador` — so late-evening activity on the last day of
+   * the month doesn't jump to the next one as it would in UTC.
+   */
+  async getMonthSummary(
+    userId: number,
+    now: Date = new Date(),
+  ): Promise<MonthSummary> {
+    const [salaries, transactions] = await Promise.all([
+      this.salaryService.findAllForUser(userId),
+      this.transactionsService.findAllForUser(userId),
+    ]);
+    const year = now.getFullYear();
+    const monthIndex = now.getMonth();
+
+    const monthSalaries = salaries.filter((salary) =>
+      isInMonth(salary.date, year, monthIndex),
+    );
+    const income = monthSalaries.reduce(
+      (sum, salary) => sum + salary.amount,
+      0,
+    );
+    const totalSpent = transactions
+      .filter((transaction) => isInMonth(transaction.date, year, monthIndex))
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    return {
+      year,
+      month: monthIndex + 1,
+      income,
+      payrollCount: monthSalaries.filter(
+        (salary) => salary.type === IncomeType.Payroll,
+      ).length,
+      totalSpent,
+      balance: income - totalSpent,
+    };
   }
 }
