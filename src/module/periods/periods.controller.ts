@@ -25,6 +25,14 @@ export class PeriodsController {
     return this.periodsService.listPeriods(req.user.userId);
   }
 
+  @Get('month')
+  @ApiOperation({
+    summary: 'Ingresos y gastos totales del mes calendario actual',
+  })
+  getMonth(@Request() req) {
+    return this.periodsService.getMonthSummary(req.user.userId);
+  }
+
   @Get('transactions')
   @ApiOperation({
     summary:

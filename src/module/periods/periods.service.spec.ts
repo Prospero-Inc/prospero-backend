@@ -5,6 +5,46 @@ import { INITIAL_PERIOD_KEY } from './period.util';
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
 
+describe('PeriodsService month summary', () => {
+  it('sums the calendar month containing `now`, counting payrolls', async () => {
+    const salaryService = {
+      findAllForUser: jest.fn().mockResolvedValue([
+        { type: IncomeType.Payroll, amount: 500, date: d('2026-10-01') },
+        { type: IncomeType.Payroll, amount: 500, date: d('2026-10-15') },
+        { type: IncomeType.Extra, amount: 50, date: d('2026-10-20') },
+        { type: IncomeType.Payroll, amount: 500, date: d('2026-09-30') },
+      ]),
+    };
+    const transactionsService = {
+      findAllForUser: jest.fn().mockResolvedValue([
+        { amount: 20, date: d('2026-10-31') },
+        { amount: 9.99, date: new Date('2026-10-21T14:04:54.000Z') },
+        { amount: 100, date: d('2026-11-01') },
+      ]),
+    };
+    const service = new PeriodsService(
+      {} as any,
+      salaryService as any,
+      transactionsService as any,
+    );
+
+    const result = await service.getMonthSummary(
+      5,
+      new Date(2026, 9, 24, 12, 0, 0),
+    );
+
+    // Raw floats, like the period summaries — the frontend formats them.
+    expect(result).toMatchObject({
+      year: 2026,
+      month: 10,
+      income: 1050,
+      payrollCount: 2,
+    });
+    expect(result.totalSpent).toBeCloseTo(29.99);
+    expect(result.balance).toBeCloseTo(1020.01);
+  });
+});
+
 describe('PeriodsService movement lists', () => {
   // Payrolls on 09-14 and 09-26 → periods: initial, [09-14, 09-25], [09-26, open)
   const salaries = [
