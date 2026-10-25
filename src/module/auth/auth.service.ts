@@ -214,8 +214,9 @@ export class AuthService {
       return { secret: user.twoFASecret, qr: user.qr2FA };
     }
 
+    // Pending until validate2FAToken confirms a code — see
+    // UserService.updateSecretKey.
     const secret = speakeasy.generateSecret();
-    console.log({ secret });
     user.twoFASecret = secret.base32;
     user.qr2FA = secret.otpauth_url;
     await this.userService.updateSecretKey(
@@ -232,24 +233,24 @@ export class AuthService {
   ): Promise<{ verified: boolean }> {
     try {
       const user = await this.userService.findById(userId);
-
-      // extract his 2FA secret
-      const secret = user.twoFASecret;
-      console.log({
-        secret,
-        user,
-      });
+      if (!user.twoFASecret) {
+        return { verified: false };
+      }
 
       const verified = speakeasy.totp.verify({
-        secret: secret,
+        secret: user.twoFASecret,
         token: token,
         encoding: 'base32',
         window: 1,
       });
 
-      return {
-        verified: verified,
-      };
+      // First correct code from the pending secret: this is what actually
+      // turns 2FA on (enable2FA only stores the secret).
+      if (verified && !user.enable2FA) {
+        await this.userService.confirm2FA(userId);
+      }
+
+      return { verified };
     } catch (error) {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
