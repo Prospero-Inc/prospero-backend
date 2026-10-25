@@ -70,6 +70,12 @@ Prisma (`prisma/schema.prisma`, client generated to the default `node_modules/@p
   to the fixed expense that generated it, without exposing that field on the public
   `POST /transactions` DTO.
 
+**Row Level Security:** production Postgres is Supabase, which auto-exposes every `public` table
+through its PostgREST API. Every migration that creates a table must also run
+`ALTER TABLE "<table>" ENABLE ROW LEVEL SECURITY;` (no policies — the app's pooler role has
+`BYPASSRLS`), or Supabase's Security Advisor flags it as publicly readable. See
+`20261025000000_enable_rls_remaining_tables` for the ones that were missed.
+
 ### Modules (`src/module/`)
 
 - **auth** — JWT (`@nestjs/jwt` + `jwt-strategy.ts`/`jwt-guard.ts`) for every protected endpoint
