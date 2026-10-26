@@ -164,6 +164,25 @@ through its PostgREST API. Every migration that creates a table must also run
 - **mail** — `@nestjs-modules/mailer` + `hbs` templates (`module/mail/templates`) for
   activation and password-reset emails; the reset link points at the separate
   `prosper-change-password` app via `API_BASE_URL_RESET`.
+- **notifications** (`src/module/notifications/`) — channel-agnostic dispatcher
+  (`NotificationsService`) over `NotificationProvider`s: `MailNotificationProvider` (Email) and
+  `PushNotificationProvider` (standard **Web Push with VAPID** via the `web-push` npm package —
+  no Firebase). Business callers (today only `GmailSyncScheduler`, once per sync pass via
+  `notifyGmailReviewPending`) build a `NotificationPayload` and never touch providers. Channel
+  selection, not fan-out: channels are tried in `CHANNEL_PRIORITY` order (Push, then Email);
+  the first one that is enabled in `NotificationPreference` for that type (`CHANNEL_TOGGLES`,
+  e.g. `gmailReviewPushEnabled`/`gmailReviewEmailEnabled`), eligible (`canDeliver`: VAPID
+  configured + ≥1 `PushSubscription`) and delivers wins — so push replaces email, and email is
+  the fallback when push is off/unsubscribed/fails on every device. `PushNotificationProvider`
+  sends `{ title, body, url, tag }` (url = `payload.ctaPath`, relative to the frontend origin)
+  to every subscription of the user, TTL 24h, deletes subscriptions answering 404/410, and
+  throws if no device accepted it. One `NotificationLog` row per delivered notification
+  (channel that won); nothing ever throws back to the caller. Endpoints: `GET/PATCH
+  /notifications/preferences`, `GET /notifications/push/vapid-public-key` (no auth),
+  `POST /notifications/push/subscriptions` (upsert by `endpoint`, reassigns to the current user)
+  and `POST /notifications/push/unsubscribe` (POST, not DELETE — the front's HTTP client drops
+  DELETE bodies). `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` are optional:
+  `VapidConfigService` disables push with one boot warning when missing/invalid.
 - **i18n** — `nestjs-i18n`, locale JSON under `src/i18n/{en,es}` for both validation and
   exception messages; Swagger operation summaries in the codebase are written in Spanish.
 
@@ -175,8 +194,10 @@ paid-into-a-transaction) are now implemented — see `periods`, `salary` and `fi
 above. Frontend is wired to all of it (`prospero-front/CLAUDE.md`). What's still genuinely
 missing:
 - No email-ingestion module (bank notification parsing, dedupe, pending-confirmation state).
-- No push notification implementation anywhere in either repo — `FixedExpense.reminder` is
-  stored but nothing reads it yet.
+- Push notifications exist only for Gmail review-pending (see **notifications** above); budget
+  threshold alerts (spec §8) and fixed-expense reminders are not built — `FixedExpense.reminder`
+  is stored but nothing reads it yet. The frontend service worker/opt-in UI lives in
+  `prospero-front`.
 
 Confirm with the co-founder before building any of the still-missing items — treat them as
 separate planned phases, not something to start opportunistically.
