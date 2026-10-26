@@ -23,6 +23,7 @@ model User {
   processedEmails        ProcessedEmail[]
   notificationPreference NotificationPreference?
   notificationLogs       NotificationLog[]
+  pushSubscriptions      PushSubscription[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   apiKey                 String?                 @unique @map("api_key")
@@ -273,15 +274,14 @@ model ProcessedEmail {
   @@map("processed_emails")
 }
 
-// Only "Email" exists today — the notifications module (src/module/
-// notifications) is written against a NotificationProvider interface so a
-// Push/FCM provider can be added later without touching call sites, but no
-// such provider exists yet (needs Firebase credentials + a frontend service
-// worker/VAPID key that haven't been built). Don't add a `Push` value here
-// until a real provider backs it — see notifications module's README-style
-// comment in notifications.types.ts for the full reasoning.
+// Email (MailNotificationProvider) and Push (PushNotificationProvider —
+// standard Web Push with VAPID via the `web-push` npm package, no Firebase).
+// NotificationsService picks Push first when the user has a subscription and
+// the per-type push preference on, falling back to Email — see
+// notifications.types.ts for the full reasoning.
 enum NotificationChannel {
   Email
+  Push
 }
 
 // GmailReviewPending is wired end-to-end (GmailSyncScheduler triggers it
@@ -301,6 +301,7 @@ model NotificationPreference {
   user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   gmailReviewEmailEnabled Boolean  @default(true) @map("gmail_review_email_enabled")
   budgetAlertEmailEnabled Boolean  @default(true) @map("budget_alert_email_enabled")
+  gmailReviewPushEnabled  Boolean  @default(true) @map("gmail_review_push_enabled")
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
@@ -325,4 +326,25 @@ model NotificationLog {
 
   @@index([userId, type, sentAt])
   @@map("notification_logs")
+}
+
+// One row per browser/device that opted into Web Push (standard VAPID, no
+// Firebase). `endpoint` is globally unique per browser push subscription —
+// if a browser re-subscribes under a different Prospero account, the row is
+// reassigned to the new user rather than duplicated (see
+// PushSubscriptionRepository.upsert). Rows are deleted when the push service
+// answers 404/410 (subscription expired/revoked) or the user unsubscribes.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

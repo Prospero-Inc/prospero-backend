@@ -17,12 +17,9 @@ import { NotificationPreferencesService } from '../services/notification-prefere
 import { UpdateNotificationPreferencesDto } from '../dto/update-notification-preferences.dto';
 
 /**
- * Registers a user's notification channel preference. Deliberately not a
- * device/FCM-token endpoint: v1 only ships the email channel (see
- * notifications module README-style comments for the sizing rationale) —
- * a `POST /notifications/device-tokens` endpoint would be the push
- * equivalent of this, added alongside `PushNotificationProvider` once that
- * exists.
+ * Registers a user's per-type, per-channel notification preferences. Push
+ * device registration lives in `PushSubscriptionsController`
+ * (`/notifications/push/*`); this endpoint only stores the opt-in toggles.
  */
 @ApiTags('notifications')
 @ApiBearerAuth('JWT-auth')
@@ -35,12 +32,14 @@ export class NotificationPreferencesController {
 
   @Get()
   @ApiOperation({
-    summary: 'Preferencias de notificación por correo del usuario autenticado',
+    summary:
+      'Preferencias de notificación (correo y push) del usuario autenticado',
   })
   @ApiOkResponse({
     schema: {
       example: {
         gmailReviewEmailEnabled: true,
+        gmailReviewPushEnabled: true,
         budgetAlertEmailEnabled: true,
       },
     },
@@ -51,7 +50,7 @@ export class NotificationPreferencesController {
 
   @Patch()
   @ApiOperation({
-    summary: 'Actualiza las preferencias de notificación por correo',
+    summary: 'Actualiza las preferencias de notificación (correo y push)',
   })
   updatePreferences(
     @Request() req,
