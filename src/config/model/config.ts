@@ -24,4 +24,14 @@ export interface Config {
   readonly GMAIL_TOKEN_ENCRYPTION_KEY: string;
 
   readonly GMAIL_OAUTH_SUCCESS_REDIRECT_URL: string;
+
+  // Web Push (VAPID). Optional — when any is missing/invalid, push is
+  // disabled and notifications go by email only. Read directly via
+  // process.env inside notifications' VapidConfigService.
+  readonly VAPID_PUBLIC_KEY?: string;
+
+  readonly VAPID_PRIVATE_KEY?: string;
+
+  /** `mailto:` address or `https:` URL push services can contact. */
+  readonly VAPID_SUBJECT?: string;
 }

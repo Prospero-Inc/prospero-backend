@@ -80,6 +80,16 @@ Configúralos en Settings → Secrets and variables → Actions de este repo:
 | `MAIL_PASSWORD` | Contraseña / API key SMTP |
 | `MAIL_FROM` | Dirección que aparecerá como remitente |
 | `MAIL_SERVICE` | Solo si tu proveedor es uno de los "well-known services" de nodemailer (ej. `gmail`) — déjalo vacío si no |
+| `VAPID_PUBLIC_KEY` | Opcional. Clave pública VAPID para Web Push — genera el par una sola vez con `npx web-push generate-vapid-keys` |
+| `VAPID_PRIVATE_KEY` | Opcional. Clave privada VAPID (secreto) del mismo par |
+| `VAPID_SUBJECT` | Opcional. Contacto para los push services: `mailto:soporte@mi-prospero.com` o una URL `https://` |
+
+Nota: el workflow actual inyecta las variables desde Doppler (config `prd`,
+`doppler run -- docker compose up`), así que las `VAPID_*` van en Doppler
+junto con el resto. Si falta cualquiera de las tres `VAPID_*`, las notificaciones push quedan
+deshabilitadas (un warning al arrancar) y todo se envía por correo como
+antes. **No rotes el par VAPID** sin necesidad: invalida todas las
+suscripciones push existentes y cada usuario tendría que volver a activarlas.
 
 Ninguno de estos valores vive en este repo. El desarrollo local sigue
 usando los valores descartables de Mailpit/Postgres que ya están en el

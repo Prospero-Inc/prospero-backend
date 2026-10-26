@@ -22,6 +22,14 @@ export const configProvider = {
         GMAIL_OAUTH_REDIRECT_URI: Joi.string().uri().required(),
         GMAIL_TOKEN_ENCRYPTION_KEY: Joi.string().base64().required(),
         GMAIL_OAUTH_SUCCESS_REDIRECT_URL: Joi.string().uri().required(),
+        // Web Push (VAPID) — optional: VapidConfigService disables push (one
+        // warn log) when unset, it never blocks boot.
+        VAPID_PUBLIC_KEY: Joi.string().optional().allow(''),
+        VAPID_PRIVATE_KEY: Joi.string().optional().allow(''),
+        VAPID_SUBJECT: Joi.string()
+          .pattern(/^(mailto:|https:\/\/)/)
+          .optional()
+          .allow(''),
       });
 
     const result = validationSchema.validate(env);
