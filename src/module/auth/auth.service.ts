@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -11,7 +12,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import * as speakeasy from 'speakeasy';
 import { Enable2FAType } from './types';
-import { ActivateUserDto } from './dto';
+import { ActivateUserDto, ResendVerificationDto } from './dto';
 import { User } from '@prisma/client';
 import { AccessTokenResponse, RequiresTwoFactorResponse } from './interfaces';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
@@ -30,6 +31,8 @@ const PRE_AUTH_TOKEN_TTL = '5m';
 
 @Injectable()
 export class AuthService {
+  #logger = new Logger(AuthService.name);
+
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
@@ -264,27 +267,57 @@ export class AuthService {
 
   async activateUser(activateUserDto: ActivateUserDto) {
     const { code, id } = activateUserDto;
-    const user: User =
-      await this.userService.findOneInactiveByIdActivationToken(+id, code);
+    const user: User = await this.userService.findOneByIdActivationToken(
+      +id,
+      code,
+    );
     if (!user) {
       throw new UnprocessableEntityException('This action can not be done');
     }
-    await this.userService.activateUser(id);
+    if (!user.isActive) await this.userService.activateUser(user.id);
   }
 
   async requestResetPassword(requestResetPassword: RequestResetPasswordDto) {
     const { email } = requestResetPassword;
+    const user = await this.userService.findOneByEmail(email);
+    // Unknown email → same silent success as a known one, so this endpoint
+    // can't be used to probe which emails have an account.
+    if (!user) return;
+
+    const resetPasswordToken = uuid4();
+    await this.userService.updateResetPasswordToken(
+      user.id,
+      resetPasswordToken,
+    );
     try {
-      const user: User = await this.userService.findOne(email);
-      const resetPasswordToken = uuid4();
-      await this.userService.updateResetPasswordToken(
-        user.id,
-        resetPasswordToken,
-      );
       await this.mailService.sendResetPassword(user, resetPasswordToken);
     } catch (error) {
+      this.#logger.error('Failed to send reset-password email', error);
       throw new UnprocessableEntityException('This action can not be done');
     }
+  }
+
+  async resendVerification({ email }: ResendVerificationDto) {
+    const user = await this.userService.findOneByEmail(email);
+    // Generic response whether the email is unknown, already active, or just
+    // got a fresh link — never reveal which.
+    if (user && !user.isActive) {
+      // Reuse the existing token rather than rotating it: rotating made every
+      // earlier email's link "invalid" (and left no valid link at all if this
+      // send then failed). The token doesn't expire, so rotation bought nothing.
+      const updated = user.activationToken
+        ? user
+        : await this.userService.updateActivationToken(user.id, uuid4());
+      try {
+        await this.mailService.sendVerificationUsers(updated);
+      } catch (error) {
+        this.#logger.error('Failed to resend verification email', error);
+        throw new UnprocessableEntityException('This action can not be done');
+      }
+    }
+    return {
+      message: 'If the account exists and is pending, we sent a new link.',
+    };
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
@@ -295,6 +328,9 @@ export class AuthService {
       const newPassword = await bcrypt.hash(password, 10);
 
       await this.userService.updatePassword(user.id, newPassword);
+      // Whoever forced a reset may be locking out an attacker: kill every
+      // existing session so a stolen refresh token stops working too.
+      await this.refreshTokenRepository.revokeAllForUser(user.id);
 
       return {
         message: `${translate('exception.passwordUpdatedSuccess')}`,
