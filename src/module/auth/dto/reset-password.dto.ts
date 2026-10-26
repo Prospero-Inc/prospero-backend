@@ -8,9 +8,12 @@ export class ResetPasswordDto {
   resetPasswordToken: string;
 
   @ApiProperty()
-  @Matches(/^(?=.*[A-Z])(?=.*[a-z])(?=.*[-_*.])[A-Za-z\d-_*.]{8,16}$/, {
+  // Same rule the signup form (prospero-front RegisterView) and the
+  // change-password SPA enforce. The old backend-only rule (special chars
+  // limited to [-_*.], max 16) rejected passwords both UIs accept.
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/, {
     message:
-      'Please choose a more secure password that includes at least one uppercase letter, at least one lowercase letter, at least one of the following special characters: [-, _, *, .] and a length between 8 and 16 characters.',
+      'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.',
   })
   password: string;
 }

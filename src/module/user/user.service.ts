@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
@@ -13,6 +14,8 @@ import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class UserService {
+  #logger = new Logger(UserService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
@@ -25,27 +28,33 @@ export class UserService {
 
       const salt = await bcrypt.genSalt(10);
       const password = await bcrypt.hash(data.password, salt);
-      let user;
-      await this.prisma.$transaction(async (tx) => {
-        user = await tx.user.create({
-          data: {
-            firstName,
-            lastName,
-            email,
-            username: usernName,
-            password,
-            apiKey: apyKey,
-            activationToken: uuid4(),
-          },
-        });
-        await this.mailService.sendVerificationUsers(user);
+      const user = await this.prisma.user.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          username: usernName,
+          password,
+          apiKey: apyKey,
+          activationToken: uuid4(),
+        },
       });
+      // Sent *after* the insert, not inside a transaction: a slow SMTP used
+      // to hit Prisma's 5s interactive-transaction timeout (rollback after
+      // the email may already have gone out) and any SMTP failure threw away
+      // the whole signup. A failed send is recoverable via
+      // POST /auth/resend-verification.
+      try {
+        await this.mailService.sendVerificationUsers(user);
+      } catch (mailError) {
+        this.#logger.error('Failed to send verification email', mailError);
+      }
 
       return {
         message: 'User created successfully',
       };
     } catch (error) {
-      console.log('error: ', error);
+      this.#logger.error('Failed to create user', error);
       if (error.code === 'P2002') {
         throw new UnauthorizedException('Email or Username already exists');
       }
@@ -190,7 +199,7 @@ export class UserService {
     }
   }
 
-  async findOneInactiveByIdActivationToken(
+  async findOneByIdActivationToken(
     id: number,
     activationToken: string,
   ): Promise<User> {
@@ -198,7 +207,6 @@ export class UserService {
       where: {
         id,
         activationToken: activationToken,
-        isActive: false,
       },
     });
 
@@ -214,9 +222,23 @@ export class UserService {
         id,
       },
       data: {
+        // activationToken is kept on purpose: re-opening the same email
+        // link (e.g. phone, then desktop) should say "already active", not
+        // "invalid link". It's only ever usable to activate this same account.
         isActive: true,
-        activationToken: null,
       },
+    });
+  }
+
+  /** Nullable lookup — unlike `findOne`, a missing user isn't an error. */
+  async findOneByEmail(email: string): Promise<User | null> {
+    return await this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async updateActivationToken(id: number, activationToken: string) {
+    return await this.prisma.user.update({
+      where: { id },
+      data: { activationToken },
     });
   }
 

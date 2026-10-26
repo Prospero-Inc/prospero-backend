@@ -72,6 +72,7 @@ Configúralos en Settings → Secrets and variables → Actions de este repo:
 | `DIRECT_URL` | Cadena de conexión usada para migraciones (unpooled, si aplica) |
 | `SECRET` | Clave para firmar los JWT — cualquier string largo y aleatorio, ej. `openssl rand -hex 32` |
 | `API_BASE_URL` | URL pública de esta misma API, **debe terminar en `/`** (se usa para armar el link de activación de cuenta) |
+| `APP_BASE_URL` | URL pública de `prospero-front`, **debe terminar en `/`** (el correo de verificación enlaza a `<APP_BASE_URL>auth/verify-account`) |
 | `API_BASE_URL_RESET` | URL pública de `prosper-change-password` ya desplegado, **debe terminar en `/`** |
 | `MAIL_HOST` | Host SMTP del proveedor que estés usando para correo real |
 | `MAIL_PORT` | Puerto SMTP (587 para STARTTLS — coincide con el `secure: false` fijo en el código) |
