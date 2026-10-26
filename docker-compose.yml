@@ -2,12 +2,14 @@ services:
   prospero:
     container_name: prospero-service
     init: true
+    restart: unless-stopped
     image: ghcr.io/prospero-inc/prospero-backend:latest
     environment:
       NODE_ENV: production
       TZ: America/El_Salvador
       API_BASE_URL: ${API_BASE_URL}
       API_BASE_URL_RESET: ${API_BASE_URL_RESET}
+      APP_BASE_URL: ${APP_BASE_URL}
       DATABASE_URL: ${DATABASE_URL}
       DIRECT_URL: ${DIRECT_URL}
       MAIL_FROM: ${MAIL_FROM}

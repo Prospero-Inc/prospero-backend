@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import * as crypto from 'crypto';
@@ -21,6 +24,13 @@ describe('AuthService', () => {
     findById: jest.Mock;
     updateSecretKey: jest.Mock;
     confirm2FA: jest.Mock;
+    findOneByEmail: jest.Mock;
+    updateResetPasswordToken: jest.Mock;
+    updateActivationToken: jest.Mock;
+  };
+  let mailService: {
+    sendResetPassword: jest.Mock;
+    sendVerificationUsers: jest.Mock;
   };
   let jwtService: { sign: jest.Mock; verify: jest.Mock };
   let refreshTokenRepository: {
@@ -51,6 +61,13 @@ describe('AuthService', () => {
       findById: jest.fn(),
       updateSecretKey: jest.fn(),
       confirm2FA: jest.fn(),
+      findOneByEmail: jest.fn(),
+      updateResetPasswordToken: jest.fn(),
+      updateActivationToken: jest.fn(),
+    };
+    mailService = {
+      sendResetPassword: jest.fn(),
+      sendVerificationUsers: jest.fn(),
     };
     jwtService = { sign: jest.fn(), verify: jest.fn() };
     refreshTokenRepository = {
@@ -65,7 +82,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: UserService, useValue: userService },
         { provide: JwtService, useValue: jwtService },
-        { provide: MailService, useValue: {} },
+        { provide: MailService, useValue: mailService },
         {
           provide: RefreshTokenRepository,
           useValue: refreshTokenRepository,
@@ -75,6 +92,126 @@ describe('AuthService', () => {
 
     service = module.get<AuthService>(AuthService);
     jest.clearAllMocks();
+  });
+
+  describe('requestResetPassword', () => {
+    const uuidV4 =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    it('resolves silently and sends no mail for an unknown email', async () => {
+      userService.findOneByEmail.mockResolvedValue(null);
+
+      await expect(
+        service.requestResetPassword({ email: 'nobody@example.com' }),
+      ).resolves.toBeUndefined();
+
+      expect(userService.updateResetPasswordToken).not.toHaveBeenCalled();
+      expect(mailService.sendResetPassword).not.toHaveBeenCalled();
+    });
+
+    it('stores a uuid token and mails the same token for a known email', async () => {
+      userService.findOneByEmail.mockResolvedValue(activeUser);
+      userService.updateResetPasswordToken.mockResolvedValue(activeUser);
+      mailService.sendResetPassword.mockResolvedValue(undefined);
+
+      await service.requestResetPassword({ email: activeUser.email });
+
+      const [id, token] = userService.updateResetPasswordToken.mock.calls[0];
+      expect(id).toBe(activeUser.id);
+      expect(token).toMatch(uuidV4);
+      expect(mailService.sendResetPassword).toHaveBeenCalledWith(
+        activeUser,
+        token,
+      );
+    });
+
+    it('throws UnprocessableEntityException when the mailer fails', async () => {
+      userService.findOneByEmail.mockResolvedValue(activeUser);
+      userService.updateResetPasswordToken.mockResolvedValue(activeUser);
+      mailService.sendResetPassword.mockRejectedValue(new Error('smtp down'));
+
+      await expect(
+        service.requestResetPassword({ email: activeUser.email }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+  });
+
+  describe('resendVerification', () => {
+    const inactiveUser = { ...activeUser, isActive: false };
+
+    it('returns a generic message and sends no mail for an unknown email', async () => {
+      userService.findOneByEmail.mockResolvedValue(null);
+
+      const result = await service.resendVerification({
+        email: 'nobody@example.com',
+      });
+
+      expect(result).toEqual({ message: expect.any(String) });
+      expect(userService.updateActivationToken).not.toHaveBeenCalled();
+      expect(mailService.sendVerificationUsers).not.toHaveBeenCalled();
+    });
+
+    it('returns a generic message and sends no mail for an already active user', async () => {
+      userService.findOneByEmail.mockResolvedValue(activeUser);
+
+      const result = await service.resendVerification({
+        email: activeUser.email,
+      });
+
+      expect(result).toEqual({ message: expect.any(String) });
+      expect(userService.updateActivationToken).not.toHaveBeenCalled();
+      expect(mailService.sendVerificationUsers).not.toHaveBeenCalled();
+    });
+
+    it('returns the same message for unknown, active and inactive users', async () => {
+      userService.findOneByEmail.mockResolvedValueOnce(null);
+      const unknown = await service.resendVerification({ email: 'a@b.com' });
+      userService.findOneByEmail.mockResolvedValueOnce(activeUser);
+      const active = await service.resendVerification({ email: 'a@b.com' });
+      userService.findOneByEmail.mockResolvedValueOnce(inactiveUser);
+      userService.updateActivationToken.mockResolvedValue(inactiveUser);
+      const inactive = await service.resendVerification({ email: 'a@b.com' });
+
+      expect(active).toEqual(unknown);
+      expect(inactive).toEqual(unknown);
+    });
+
+    it('reuses the existing activation token so earlier links stay valid', async () => {
+      const pending = { ...inactiveUser, activationToken: 'old-token' };
+      userService.findOneByEmail.mockResolvedValue(pending);
+      mailService.sendVerificationUsers.mockResolvedValue(undefined);
+
+      await service.resendVerification({ email: inactiveUser.email });
+
+      expect(userService.updateActivationToken).not.toHaveBeenCalled();
+      expect(mailService.sendVerificationUsers).toHaveBeenCalledWith(pending);
+    });
+
+    it('issues a token only when the inactive user has none', async () => {
+      const tokenless = { ...inactiveUser, activationToken: null };
+      const updated = { ...inactiveUser, activationToken: 'new-token' };
+      userService.findOneByEmail.mockResolvedValue(tokenless);
+      userService.updateActivationToken.mockResolvedValue(updated);
+      mailService.sendVerificationUsers.mockResolvedValue(undefined);
+
+      await service.resendVerification({ email: inactiveUser.email });
+
+      expect(userService.updateActivationToken).toHaveBeenCalledWith(
+        inactiveUser.id,
+        expect.any(String),
+      );
+      expect(mailService.sendVerificationUsers).toHaveBeenCalledWith(updated);
+    });
+
+    it('throws UnprocessableEntityException when the mailer fails', async () => {
+      userService.findOneByEmail.mockResolvedValue(inactiveUser);
+      userService.updateActivationToken.mockResolvedValue(inactiveUser);
+      mailService.sendVerificationUsers.mockRejectedValue(new Error('smtp'));
+
+      await expect(
+        service.resendVerification({ email: inactiveUser.email }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
   });
 
   describe('login', () => {

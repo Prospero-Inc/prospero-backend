@@ -9,6 +9,8 @@ import {
   Patch,
   Param,
   HttpCode,
+  BadRequestException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
@@ -29,6 +31,7 @@ import {
   ActivateUserDto,
   LogoutDto,
   RefreshTokenDto,
+  ResendVerificationDto,
   VerifyLoginTwoFactorDto,
 } from './dto';
 import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
@@ -200,6 +203,19 @@ export class AuthController {
     return await this.authService.requestResetPassword(requestResetPassword);
   }
 
+  @Post('/resend-verification')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Reenviar el correo de verificación de cuenta' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Respuesta genérica: no revela si el correo existe o ya está activo.',
+  })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return await this.authService.resendVerification(dto);
+  }
+
   @Post('/reset-password/:token')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resetPassword(
@@ -207,19 +223,25 @@ export class AuthController {
     @Body()
     data: { password: string; confirmPassword: string },
   ) {
-    console.log({ data });
-    if (data.password !== data.confirmPassword) {
-      return { errorMessages: ['Las contraseñas no coinciden'], token };
+    // These used to be *returned* as a 201 body (leftover from the old
+    // server-rendered hbs form), so the change-password SPA — which only
+    // checks `response.ok` — showed "password updated" while nothing changed.
+    const password = data?.password;
+    if (!password || password !== data?.confirmPassword) {
+      throw new BadRequestException(['Passwords do not match']);
     }
     const dto = new ResetPasswordDto();
-    dto.password = data.password;
+    dto.password = password;
     dto.resetPasswordToken = token;
     const errors = await validate(dto);
+    // A malformed token gets the same generic answer as an unknown/used one.
+    if (errors.some((error) => error.property === 'resetPasswordToken')) {
+      throw new UnprocessableEntityException('This action can not be done');
+    }
     if (errors.length) {
-      const errorMessages = errors.map((error) =>
-        Object.values(error.constraints),
+      throw new BadRequestException(
+        errors.flatMap((error) => Object.values(error.constraints ?? {})),
       );
-      return { errorMessages, token };
     }
     return await this.authService.resetPassword(dto);
   }
