@@ -1,3 +1,11 @@
+/** Gmail accounts synced in parallel by the hourly job (Gmail API quota and
+ * our small VPS both prefer a handful, not one-by-one nor all at once). */
+export const GMAIL_SYNC_CONCURRENCY = 3;
+
+/** Lease for the hourly job (see SchedulerLockService): longer than a full
+ * pass is expected to take, shorter than the hour between runs. */
+export const GMAIL_SYNC_LOCK_TTL_MS = 50 * 60 * 1000;
+
 /**
  * Stable, human-readable `ProcessedEmail.reason` strings — centralized so
  * the orchestrator and its tests agree on exact wording, mirroring how

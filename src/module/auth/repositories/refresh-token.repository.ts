@@ -45,4 +45,18 @@ export class RefreshTokenRepository {
       data: { revokedAt: new Date() },
     });
   }
+
+  /**
+   * Deletes tokens nobody can use anymore: already expired, or revoked
+   * before `revokedBefore`. Recently revoked ones are kept so replaying them
+   * still trips reuse detection (which revokes the whole family).
+   */
+  async deleteStale(now: Date, revokedBefore: Date): Promise<number> {
+    const { count } = await this.prisma.refreshToken.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lt: now } }, { revokedAt: { lt: revokedBefore } }],
+      },
+    });
+    return count;
+  }
 }

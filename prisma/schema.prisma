@@ -29,6 +29,8 @@ model User {
   apiKey                 String?                 @unique @map("api_key")
   enable2FA              Boolean                 @default(false) @map("enable_2fa")
   twoFASecret            String?                 @map("2fa_secret")
+  /// Last TOTP time step (30 s) accepted, so the same code can't be used twice.
+  twoFALastUsedStep      Int?                    @map("2fa_last_used_step")
   qr2FA                  String?                 @map("qr_2fa")
   password               String?
   email                  String                  @unique
@@ -56,6 +58,8 @@ model Transaction {
   userId          Int                     @map("user_id")
   user            User                    @relation(fields: [userId], references: [id])
   amount          Float
+  /// Integer-cents twin of `amount` (D3, double-write phase).
+  amountCents     Int?                    @map("amount_cents")
   date            DateTime
   category        BudgetCategory?
   description     String?
@@ -72,6 +76,7 @@ model Transaction {
   updatedAt       DateTime                @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
+  @@index([userId, date], name: "transaction_user_date_idx")
   @@map("transactions")
 }
 
@@ -91,6 +96,8 @@ model FixedExpense {
   userId         Int            @map("user_id")
   user           User           @relation(fields: [userId], references: [id])
   amount         Float
+  /// Integer-cents twin of `amount` (D3, double-write phase).
+  amountCents    Int?           @map("amount_cents")
   name           String
   budgetCategory BudgetCategory @map("budget_category")
   dueDate        DateTime       @map("due_date")
@@ -109,6 +116,8 @@ model Salary {
   userId                  Int                   @map("user_id")
   user                    User                  @relation(fields: [userId], references: [id])
   amount                  Float
+  /// Integer-cents twin of `amount` (D3, double-write phase).
+  amountCents             Int?                  @map("amount_cents")
   date                    DateTime
   type                    IncomeType            @default(Payroll)
   budgetCategory          BudgetCategory?       @map("budget_category")
@@ -258,6 +267,8 @@ model ProcessedEmail {
   // "create-anyway" flow without ever inventing amount/date/description.
   // Nullable because older rows (pre-migration) never had this captured.
   parsedAmount         Float?               @map("parsed_amount")
+  /// Integer-cents twin of `parsedAmount` (D3, double-write phase).
+  parsedAmountCents    Int?                 @map("parsed_amount_cents")
   parsedDate           DateTime?            @map("parsed_date")
   parsedDescription    String?              @map("parsed_description")
   // Set once the user has acted on a PossibleDuplicate (via "create
@@ -349,4 +360,15 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Lease-based lock for scheduled jobs (SchedulerLockService): a row per job
+/// name, held until `lockedUntil`. Works through the transaction-mode
+/// pooler, unlike session-level Postgres advisory locks.
+model SchedulerLock {
+  name        String   @id
+  lockedUntil DateTime @map("locked_until")
+  lockedBy    String   @map("locked_by")
+
+  @@map("scheduler_locks")
 }
