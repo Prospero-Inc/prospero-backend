@@ -38,6 +38,7 @@ export interface I18nTranslations {
     passwordDoesNotMatch: string;
     errorVerifyingToken: string;
     passwordUpdatedSuccess: string;
+    twoFactorAlreadyEnabled: string;
   };
   validation: {
     isNotEmpty: string;
