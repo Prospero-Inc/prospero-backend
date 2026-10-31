@@ -3,29 +3,11 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
-import { TRUSTED_PROXIES } from './config/trust-proxy';
+import { configureApp } from './app.setup';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // Real client IP for the throttler, see trust-proxy.ts.
-  app.set('trust proxy', TRUSTED_PROXIES);
-  app.useGlobalPipes(
-    new I18nValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
-
-  app.useGlobalFilters(
-    new I18nValidationExceptionFilter({
-      detailedErrors: false,
-    }),
-  );
+  configureApp(app);
 
   // Configurar archivos estáticos
   app.useStaticAssets(join(__dirname, '..', 'public'));
@@ -42,41 +24,40 @@ async function bootstrap() {
   app.setBaseViewsDir(join(__dirname, 'module/auth/', 'views'));
   app.setViewEngine('hbs');
 
-  const config = new DocumentBuilder()
-    .setTitle('Prospero API documentation UNAB!!!!!!!!!')
-    .setDescription('The Prospero API description')
-    .setVersion('1.0')
-    .addServer('http://localhost:3000/api/', 'Local environment')
-    .addServer('http://31.220.97.169:3000/api/', 'Staging')
-    .addServer('https://#/', 'Production')
-    .addTag('Endpoint')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .setContact(
-      'Soporte',
-      'http://mi-prospero.com/soporte',
-      'soporte@mi-prospero.com',
-    )
-    .setLicense('MIT', 'https://opensource.org/licenses/MIT')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
-  app.setGlobalPrefix('/api');
-  app.enableCors({
-    origin: '*',
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    preflightContinue: false,
-  });
+  // API docs only outside production: they map every endpoint for anyone.
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Prospero API documentation UNAB!!!!!!!!!')
+      .setDescription('The Prospero API description')
+      .setVersion('1.0')
+      .addServer('http://localhost:3000/api/', 'Local environment')
+      .addServer('http://31.220.97.169:3000/api/', 'Staging')
+      .addServer('https://#/', 'Production')
+      .addTag('Endpoint')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .setContact(
+        'Soporte',
+        'http://mi-prospero.com/soporte',
+        'soporte@mi-prospero.com',
+      )
+      .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+      .build();
+    // The servers above already include /api/.
+    const document = SwaggerModule.createDocument(app, config, {
+      ignoreGlobalPrefix: true,
+    });
+    SwaggerModule.setup('api-docs', app, document);
+  }
 
   await app.listen(3000);
 }
