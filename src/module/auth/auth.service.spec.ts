@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  ConflictException,
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -24,6 +25,7 @@ describe('AuthService', () => {
     findById: jest.Mock;
     updateSecretKey: jest.Mock;
     confirm2FA: jest.Mock;
+    disable2FA: jest.Mock;
     findOneByEmail: jest.Mock;
     updateResetPasswordToken: jest.Mock;
     updateActivationToken: jest.Mock;
@@ -61,6 +63,7 @@ describe('AuthService', () => {
       findById: jest.fn(),
       updateSecretKey: jest.fn(),
       confirm2FA: jest.fn(),
+      disable2FA: jest.fn(),
       findOneByEmail: jest.fn(),
       updateResetPasswordToken: jest.fn(),
       updateActivationToken: jest.fn(),
@@ -249,6 +252,7 @@ describe('AuthService', () => {
       expect(jwtService.sign).toHaveBeenCalledWith({
         email: activeUser.email,
         userId: activeUser.id,
+        typ: 'access',
       });
       expect(refreshTokenRepository.create).toHaveBeenCalledWith(
         activeUser.id,
@@ -278,7 +282,7 @@ describe('AuthService', () => {
         message: '',
       });
       expect(jwtService.sign).toHaveBeenCalledWith(
-        { email: twoFaUser.email, userId: twoFaUser.id, pending2FA: true },
+        { email: twoFaUser.email, userId: twoFaUser.id, typ: 'pre_auth' },
         { expiresIn: '5m' },
       );
       expect(refreshTokenRepository.create).not.toHaveBeenCalled();
@@ -302,10 +306,11 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
-    it('rejects a token that is not marked pending2FA', async () => {
+    it('rejects a token whose typ is not pre_auth', async () => {
       jwtService.verify.mockReturnValue({
         email: twoFaUser.email,
         userId: twoFaUser.id,
+        typ: 'access',
       });
 
       await expect(
@@ -317,7 +322,7 @@ describe('AuthService', () => {
       jwtService.verify.mockReturnValue({
         email: twoFaUser.email,
         userId: twoFaUser.id,
-        pending2FA: true,
+        typ: 'pre_auth',
       });
       userService.findById.mockResolvedValue(twoFaUser);
       (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
@@ -331,7 +336,7 @@ describe('AuthService', () => {
       jwtService.verify.mockReturnValue({
         email: twoFaUser.email,
         userId: twoFaUser.id,
-        pending2FA: true,
+        typ: 'pre_auth',
       });
       userService.findById.mockResolvedValue(twoFaUser);
       (speakeasy.totp.verify as jest.Mock).mockReturnValue(true);
@@ -423,6 +428,49 @@ describe('AuthService', () => {
       expect(speakeasy.totp.verify).not.toHaveBeenCalledWith(
         expect.objectContaining({ token: '123456', secret: null }),
       );
+    });
+
+    it('refuses to hand out the secret again once 2FA is enabled', async () => {
+      userService.findById.mockResolvedValue({
+        ...activeUser,
+        enable2FA: true,
+        twoFASecret: 'ACTIVESECRET',
+      });
+
+      await expect(service.enable2FA(1)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(userService.updateSecretKey).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('disable2FA', () => {
+    const twoFaUser = {
+      ...activeUser,
+      enable2FA: true,
+      twoFASecret: 'ACTIVESECRET',
+    };
+
+    it('keeps 2FA on when the code is wrong', async () => {
+      userService.findById.mockResolvedValue(twoFaUser);
+      (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
+
+      await expect(service.disable2FA(1, '000000')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(userService.disable2FA).not.toHaveBeenCalled();
+    });
+
+    it('turns 2FA off with a valid code', async () => {
+      userService.findById.mockResolvedValue(twoFaUser);
+      (speakeasy.totp.verify as jest.Mock).mockReturnValue(true);
+
+      await service.disable2FA(1, '123456');
+
+      expect(speakeasy.totp.verify).toHaveBeenCalledWith(
+        expect.objectContaining({ secret: 'ACTIVESECRET', token: '123456' }),
+      );
+      expect(userService.disable2FA).toHaveBeenCalledWith(1);
     });
   });
 

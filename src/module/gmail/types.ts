@@ -1,5 +1,5 @@
 import { GmailConnectionStatus } from '@prisma/client';
-import { OAUTH_STATE_PURPOSE } from './gmail.constants';
+import { TOKEN_TYPE } from '../auth/types';
 
 /** Shape of Google's token endpoint response (both authorization_code and refresh_token grants). */
 export interface GoogleTokenResponse {
@@ -13,7 +13,7 @@ export interface GoogleTokenResponse {
 /** Payload embedded in the signed `state` query param round-tripped through Google. */
 export interface OAuthStatePayload {
   userId: number;
-  purpose: typeof OAUTH_STATE_PURPOSE;
+  typ: typeof TOKEN_TYPE.OAuthState;
 }
 
 /**

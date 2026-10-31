@@ -16,7 +16,6 @@ import {
   GMAIL_READONLY_SCOPE,
   GMAIL_REVOKE_URL,
   GMAIL_TOKEN_URL,
-  OAUTH_STATE_PURPOSE,
   OAUTH_STATE_TTL,
   TOKEN_REFRESH_SKEW_SECONDS,
 } from '../gmail.constants';
@@ -29,6 +28,7 @@ import {
   GoogleTokenResponse,
   OAuthStatePayload,
 } from '../types';
+import { TOKEN_TYPE } from '../../auth/types';
 import { encryptToken, decryptToken } from '../utils/token-encryption.util';
 
 const FORM_URL_ENCODED_HEADERS = {
@@ -292,13 +292,13 @@ export class GmailOAuthService {
   private signOAuthState(userId: number): string {
     const payload: OAuthStatePayload = {
       userId,
-      purpose: OAUTH_STATE_PURPOSE,
+      typ: TOKEN_TYPE.OAuthState,
     };
 
     return this.jwtService.sign(payload, { expiresIn: OAUTH_STATE_TTL });
   }
 
-  /** Verifies `state`'s signature + discriminant claim, returns the embedded userId or throws. */
+  /** Verifies `state`'s signature + `typ` claim, returns the embedded userId or throws. */
   private verifyOAuthState(state: string): number {
     let payload: OAuthStatePayload;
     try {
@@ -310,10 +310,10 @@ export class GmailOAuthService {
       );
     }
 
-    if (payload.purpose !== OAUTH_STATE_PURPOSE) {
+    if (payload.typ !== TOKEN_TYPE.OAuthState) {
       throw new GmailOAuthCallbackError(
         'invalid_state',
-        'OAuth state has an unexpected purpose claim',
+        'OAuth state has an unexpected typ claim',
       );
     }
 

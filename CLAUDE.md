@@ -80,9 +80,16 @@ through its PostgREST API. Every migration that creates a table must also run
 
 - **auth** — JWT (`@nestjs/jwt` + `jwt-strategy.ts`/`jwt-guard.ts`) for every protected endpoint
   in the app. `AuthService.login` returns a full `AccessTokenResponse` directly when 2FA is
-  disabled, or `{ requires2FA, preAuthToken }` (a short-lived 5-minute JWT with a `pending2FA`
-  claim) when it's enabled; `POST /auth/login/verify-2fa` exchanges that pre-auth token + OTP for
-  the real access token via `AuthService.verifyLoginTwoFactor`. TOTP 2FA itself uses `speakeasy`.
+  disabled, or `{ requires2FA, preAuthToken }` (a short-lived 5-minute JWT) when it's enabled;
+  `POST /auth/login/verify-2fa` exchanges that pre-auth token + OTP for the real access token via
+  `AuthService.verifyLoginTwoFactor`. TOTP 2FA itself uses `speakeasy`. **Every JWT carries a
+  `typ` claim** (`TOKEN_TYPE` in `auth/types.ts`: `access` | `pre_auth` | `oauth_state`) because
+  they all share `SECRET`: `JwtStrategy.validate` accepts only `access`, `verifyLoginTwoFactor`
+  only `pre_auth`, the Gmail OAuth callback only `oauth_state` — without it a preAuthToken or a
+  Gmail `state` worked as a session token (2FA bypass, fixed in Fase 0 of
+  `../docs/plan-remediacion.md`, covered by `test/auth-token-types.e2e-spec.ts`). Any new JWT
+  must declare its own `typ`. `GET /auth/enable-2fa` returns 409 once 2FA is active (never
+  re-sends the secret) and `POST /auth/disable-2fa` requires a valid TOTP code in `{ token }`.
   Access + refresh tokens (design doc: `../docs/auth-refresh-tokens.md`): the signed JWT
   `accessToken` (`{ email, userId }`, HS256 via `SECRET`) now expires in **15 minutes**
   (`ACCESS_TOKEN_TTL`/`ACCESS_TOKEN_TTL_SECONDS` in `auth.constants.ts`, wired into

@@ -121,6 +121,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Habilitar autenticación de dos factores (2FA)' })
   @ApiResponse({ status: 200, description: '2FA habilitado con éxito.' })
   @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
+  @ApiResponse({ status: 409, description: '2FA ya estaba activado.' })
   enable2FA(@Request() req): Promise<Enable2FAType> {
     return this.authService.enable2FA(req.user.userId);
   }
@@ -145,15 +146,23 @@ export class AuthController {
     );
   }
 
-  @Get('disable-2fa')
+  @Post('disable-2fa')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiBearerAuth()
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Deshabilitar autenticación de dos factores (2FA)' })
+  @ApiOperation({
+    summary:
+      'Deshabilitar autenticación de dos factores (2FA) con un código TOTP',
+  })
   @ApiResponse({ status: 200, description: '2FA deshabilitado con éxito.' })
-  @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
-  disable2FA(@Request() req) {
-    return this.authService.disable2FA(req.user.userId);
+  @ApiResponse({
+    status: 401,
+    description: 'Usuario no autorizado o código incorrecto.',
+  })
+  disable2FA(@Request() req, @Body() validateTokenDTO: ValidateTokenDTO) {
+    return this.authService.disable2FA(req.user.userId, validateTokenDTO.token);
   }
 
   @Get('profile')

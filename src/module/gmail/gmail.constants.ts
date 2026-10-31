@@ -15,9 +15,6 @@ export const GMAIL_READONLY_SCOPE =
 /** TTL of the signed `state` JWT passed through the OAuth redirect dance. */
 export const OAUTH_STATE_TTL = '5m';
 
-/** Discriminant claim on the `state` JWT payload, see types.ts's `OAuthStatePayload`. */
-export const OAUTH_STATE_PURPOSE = 'gmailOauthState' as const;
-
 /**
  * How far ahead of the real expiry `getValidAccessToken` proactively refreshes,
  * so a token that is technically still valid but about to expire mid-request

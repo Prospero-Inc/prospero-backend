@@ -27,5 +27,7 @@
     "invalidCursor": "El cursor proporcionado es inválido.",
     "cursorInvalidDate": "El cursor no referencia una fecha válida.",
     "cursorInvalidNumber": "El cursor no referencia un número válido.",
-    "apiUnauthorizedResponse": "No hay token de autenticación en la solicitud."
+    "apiUnauthorizedResponse": "No hay token de autenticación en la solicitud.",
+    "errorVerifyingToken": "Código de verificación inválido o vencido.",
+    "twoFactorAlreadyEnabled": "La autenticación de dos factores ya está activada."
 }
