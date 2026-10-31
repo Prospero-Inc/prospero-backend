@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
-import { ScheduleModule } from '@nestjs/schedule';
 import { GmailModule } from '../gmail/gmail.module';
 import { FinancialInstitutionsModule } from '../financial-institutions/financial-institutions.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { SalaryModule } from '../salary/salary.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaService } from '../prisma.service';
+import { SchedulerLockModule } from '../scheduler-lock/scheduler-lock.module';
 import { GmailApiClient } from './services/gmail-api-client.service';
 import { DuplicateDetectorService } from './services/duplicate-detector.service';
 import { GmailSyncOrchestrator } from './services/gmail-sync-orchestrator.service';
@@ -18,9 +18,8 @@ import { GmailSyncController } from './controllers/gmail-sync.controller';
 
 /**
  * Phase 3's sync/parsing pipeline — kept separate from `GmailModule` (OAuth
- * connect/disconnect only) as planned. This is the only module in the app
- * registering a `@Cron` job, so `ScheduleModule.forRoot()` lives here rather
- * than in `AppModule`. Also owns `ProcessedEmailsController` (the "create
+ * connect/disconnect only) as planned. Its hourly `@Cron` job takes a DB
+ * lease through `SchedulerLockModule`. Also owns `ProcessedEmailsController` (the "create
  * anyway" action on a `ProcessedEmail`) since it's the only consumer of
  * `ProcessedEmailRepository`. Imports `NotificationsModule` so
  * `GmailSyncScheduler` can notify a user once a sync pass creates new
@@ -30,7 +29,7 @@ import { GmailSyncController } from './controllers/gmail-sync.controller';
 @Module({
   imports: [
     HttpModule,
-    ScheduleModule.forRoot(),
+    SchedulerLockModule,
     GmailModule,
     FinancialInstitutionsModule,
     TransactionsModule,

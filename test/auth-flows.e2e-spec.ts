@@ -190,11 +190,18 @@ describe('Auth flows (e2e, Postgres)', () => {
       const { body: setup } = await get('/api/auth/enable-2fa')
         .set('Authorization', auth)
         .expect(200);
-      const code = () =>
-        speakeasy.totp({ secret: setup.secret, encoding: 'base32' });
+      // Codes are single-use per 30 s step: the second one comes from the
+      // next step, which the ±1 step window accepts.
+      const codeAt = (offsetSeconds: number) =>
+        speakeasy.totp({
+          secret: setup.secret,
+          encoding: 'base32',
+          time: Math.floor(Date.now() / 1000) + offsetSeconds,
+        });
+      const firstCode = codeAt(0);
       await post('/api/auth/validate-2fa')
         .set('Authorization', auth)
-        .send({ token: code() })
+        .send({ token: firstCode })
         .expect(201, { verified: true });
 
       const { body: pending } = await login(email).expect(201);
@@ -205,8 +212,13 @@ describe('Auth flows (e2e, Postgres)', () => {
         .set('Authorization', `Bearer ${pending.preAuthToken}`)
         .expect(401);
 
+      // Replaying the code already used to enable 2FA is rejected.
+      await post('/api/auth/login/verify-2fa')
+        .send({ preAuthToken: pending.preAuthToken, token: firstCode })
+        .expect(401);
+
       const { body: full } = await post('/api/auth/login/verify-2fa')
-        .send({ preAuthToken: pending.preAuthToken, token: code() })
+        .send({ preAuthToken: pending.preAuthToken, token: codeAt(30) })
         .expect(201);
       await get('/api/auth/profile')
         .set('Authorization', `Bearer ${full.accessToken}`)

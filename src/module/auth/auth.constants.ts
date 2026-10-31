@@ -19,3 +19,6 @@ export const LOGIN_EMAIL_WINDOW_MS = 15 * 60 * 1000;
 
 /** Lifetime of a password-reset link. */
 export const RESET_PASSWORD_TTL_MS = 60 * 60 * 1000;
+
+/** Revoked refresh tokens are kept this long (for reuse detection), then deleted. */
+export const REVOKED_REFRESH_TOKEN_RETENTION_DAYS = 30;

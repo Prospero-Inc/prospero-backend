@@ -3,18 +3,26 @@ import { GmailSyncScheduler } from './gmail-sync.scheduler';
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
 import { NotificationsService } from 'src/module/notifications/services/notifications.service';
 import { GmailSyncOrchestrator } from '../services/gmail-sync-orchestrator.service';
+import { SchedulerLockService } from 'src/module/scheduler-lock/scheduler-lock.service';
 
 describe('GmailSyncScheduler', () => {
   let scheduler: GmailSyncScheduler;
   let gmailOAuthService: { listConnectionsForAutoSync: jest.Mock };
   let orchestrator: { syncConnection: jest.Mock };
   let notificationsService: { notifyGmailReviewPending: jest.Mock };
+  let schedulerLock: { runExclusive: jest.Mock };
 
   beforeEach(async () => {
     gmailOAuthService = { listConnectionsForAutoSync: jest.fn() };
     orchestrator = { syncConnection: jest.fn() };
     notificationsService = {
       notifyGmailReviewPending: jest.fn().mockResolvedValue(undefined),
+    };
+    // Lock free by default: run the job.
+    schedulerLock = {
+      runExclusive: jest.fn((_name, _ttl, job: () => Promise<void>) =>
+        job().then(() => true),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -23,6 +31,7 @@ describe('GmailSyncScheduler', () => {
         { provide: GmailOAuthService, useValue: gmailOAuthService },
         { provide: GmailSyncOrchestrator, useValue: orchestrator },
         { provide: NotificationsService, useValue: notificationsService },
+        { provide: SchedulerLockService, useValue: schedulerLock },
       ],
     }).compile();
 
@@ -39,6 +48,19 @@ describe('GmailSyncScheduler', () => {
     expect(orchestrator.syncConnection).toHaveBeenCalledTimes(2);
     expect(orchestrator.syncConnection).toHaveBeenCalledWith(connections[0]);
     expect(orchestrator.syncConnection).toHaveBeenCalledWith(connections[1]);
+  });
+
+  it('does not sync anything when another process holds the lock', async () => {
+    schedulerLock.runExclusive.mockResolvedValue(false);
+
+    await scheduler.handleHourlySync();
+
+    expect(schedulerLock.runExclusive).toHaveBeenCalledWith(
+      'gmail-sync',
+      expect.any(Number),
+      expect.any(Function),
+    );
+    expect(gmailOAuthService.listConnectionsForAutoSync).not.toHaveBeenCalled();
   });
 
   it('one user failing (e.g. revoked token) does not abort the rest of the batch', async () => {

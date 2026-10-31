@@ -134,6 +134,22 @@ export class UserService {
     return user;
   }
 
+  /**
+   * Records `step` as the last TOTP step used, only if it's newer than the
+   * stored one — atomically, so two concurrent requests with the same code
+   * can't both succeed. Returns whether the step was accepted.
+   */
+  async consumeTotpStep(id: number, step: number): Promise<boolean> {
+    const { count } = await this.prisma.user.updateMany({
+      where: {
+        id,
+        OR: [{ twoFALastUsedStep: null }, { twoFALastUsedStep: { lt: step } }],
+      },
+      data: { twoFALastUsedStep: step },
+    });
+    return count === 1;
+  }
+
   async disable2FA(id: number) {
     await this.prisma.user.update({
       where: {

@@ -30,6 +30,9 @@ import {
 
 const PRE_AUTH_TOKEN_TTL = '5m';
 
+/** speakeasy's default TOTP period. */
+const TOTP_STEP_SECONDS = 30;
+
 /**
  * bcrypt hash (cost 10, same as real ones) compared against when the email
  * has no password to check, so an unknown email takes as long as a wrong
@@ -107,7 +110,7 @@ export class AuthService {
 
     const user = await this.userService.findById(payload.userId);
 
-    if (!this.isValidTotp(user.twoFASecret, token)) {
+    if (!(await this.acceptTotp(user, token))) {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
       );
@@ -252,7 +255,7 @@ export class AuthService {
         return { verified: false };
       }
 
-      const verified = this.isValidTotp(user.twoFASecret, token);
+      const verified = await this.acceptTotp(user, token);
 
       // First correct code from the pending secret: this is what actually
       // turns 2FA on (enable2FA only stores the secret).
@@ -272,7 +275,7 @@ export class AuthService {
   async disable2FA(userId: number, token: string) {
     const user = await this.userService.findById(userId);
 
-    if (!user.enable2FA || !this.isValidTotp(user.twoFASecret, token)) {
+    if (!user.enable2FA || !(await this.acceptTotp(user, token))) {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
       );
@@ -281,15 +284,29 @@ export class AuthService {
     return await this.userService.disable2FA(userId);
   }
 
-  private isValidTotp(secret: string | null, token: string): boolean {
-    if (!secret) return false;
+  /**
+   * Checks `token` against the user's secret and burns its time step, so an
+   * intercepted or shoulder-surfed code can't be replayed while it's still
+   * within the validity window.
+   */
+  private async acceptTotp(user: User, token: string): Promise<boolean> {
+    const step = this.matchTotpStep(user.twoFASecret, token);
+    return step !== null && this.userService.consumeTotpStep(user.id, step);
+  }
 
-    return speakeasy.totp.verify({
+  /** The 30 s time step `token` belongs to (±1 for clock drift), or null. */
+  private matchTotpStep(secret: string | null, token: string): number | null {
+    if (!secret) return null;
+
+    const match = speakeasy.totp.verifyDelta({
       secret,
       token,
       encoding: 'base32',
       window: 1,
     });
+    if (!match) return null;
+
+    return Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + match.delta;
   }
 
   async activateUser(activateUserDto: ActivateUserDto) {
