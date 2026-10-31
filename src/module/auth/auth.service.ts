@@ -93,7 +93,7 @@ export class AuthService {
     let payload: PayloadType;
     try {
       payload = this.jwtService.verify<PayloadType>(preAuthToken);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
       );
@@ -261,7 +261,7 @@ export class AuthService {
       }
 
       return { verified };
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
       );

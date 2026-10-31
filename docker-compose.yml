@@ -3,7 +3,9 @@ services:
     container_name: prospero-service
     init: true
     restart: unless-stopped
-    image: ghcr.io/prospero-inc/prospero-backend:latest
+    # IMAGE_TAG = the commit SHA in the deploy job (or `rollback`);
+    # `latest` only for a manual run without it.
+    image: ghcr.io/prospero-inc/prospero-backend:${IMAGE_TAG:-latest}
     environment:
       NODE_ENV: production
       TZ: America/El_Salvador
@@ -31,6 +33,19 @@ services:
     # let anyone skip Caddy, and `trust proxy` assumes private sources are ours.
     ports:
       - '127.0.0.1:3000:3000'
+    # The slim image has no curl: Node 22's fetch does the probe.
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - prospero
 

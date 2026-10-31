@@ -1,5 +1,5 @@
 # Etapa de construcción
-FROM node:18.16.0-slim AS builder
+FROM node:22.23.4-slim AS builder
 
 # Establecer el directorio de trabajo
 WORKDIR /usr/src/app
@@ -27,7 +27,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Etapa final
-FROM node:18.16.0-slim
+FROM node:22.23.4-slim
 
 # Establecer el directorio de trabajo
 WORKDIR /usr/src/app
@@ -47,7 +47,7 @@ COPY --from=builder /usr/src/app/public ./public
 # instead — that also means they never get baked into an image layer.
 
 # Instalar dependencias solo para producción
-RUN npm ci --production
+RUN npm ci --omit=dev
 
 # Exponer el puerto de la aplicación
 EXPOSE 3000
