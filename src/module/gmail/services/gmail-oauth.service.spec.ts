@@ -45,8 +45,6 @@ describe('GmailOAuthService', () => {
     process.env.GMAIL_OAUTH_CLIENT_SECRET = 'client-secret';
     process.env.GMAIL_OAUTH_REDIRECT_URI =
       'http://localhost:3000/gmail/oauth/callback';
-    process.env.GMAIL_OAUTH_SUCCESS_REDIRECT_URL =
-      'http://localhost:4000/settings';
 
     repository = {
       findByUserId: jest.fn(),
@@ -100,7 +98,7 @@ describe('GmailOAuthService', () => {
     });
   });
 
-  describe('handleOAuthCallback', () => {
+  describe('completeOAuth', () => {
     const signState = (userId: number, expiresIn: string | number = '5m') =>
       jwtService.sign({ userId, typ: 'oauth_state' }, { expiresIn });
 
@@ -118,7 +116,7 @@ describe('GmailOAuthService', () => {
         }),
       );
 
-      await service.handleOAuthCallback('auth-code', signState(7));
+      await service.completeOAuth(7, 'auth-code', signState(7));
 
       expect(repository.create).toHaveBeenCalledTimes(1);
       const [userId, data] = repository.create.mock.calls[0];
@@ -144,7 +142,7 @@ describe('GmailOAuthService', () => {
         }),
       );
 
-      await service.handleOAuthCallback('auth-code', signState(7));
+      await service.completeOAuth(7, 'auth-code', signState(7));
 
       expect(repository.update).toHaveBeenCalledTimes(1);
       const [userId, data] = repository.update.mock.calls[0];
@@ -167,7 +165,7 @@ describe('GmailOAuthService', () => {
       );
 
       await expect(
-        service.handleOAuthCallback('auth-code', signState(7)),
+        service.completeOAuth(7, 'auth-code', signState(7)),
       ).rejects.toMatchObject({ reason: 'no_refresh_token' });
       expect(repository.create).not.toHaveBeenCalled();
     });
@@ -180,8 +178,16 @@ describe('GmailOAuthService', () => {
       });
 
       await expect(
-        service.handleOAuthCallback('auth-code', foreignState),
+        service.completeOAuth(7, 'auth-code', foreignState),
       ).rejects.toMatchObject({ reason: 'invalid_state' });
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('state started by another user: throws invalid_state before touching Google', async () => {
+      await expect(
+        service.completeOAuth(8, 'auth-code', signState(7)),
+      ).rejects.toMatchObject({ reason: 'invalid_state' });
+      expect(httpService.post).not.toHaveBeenCalled();
       expect(repository.create).not.toHaveBeenCalled();
     });
 
@@ -189,7 +195,7 @@ describe('GmailOAuthService', () => {
       const state = jwtService.sign({ userId: 7, typ: 'access' });
 
       await expect(
-        service.handleOAuthCallback('auth-code', state),
+        service.completeOAuth(7, 'auth-code', state),
       ).rejects.toMatchObject({ reason: 'invalid_state' });
     });
 
@@ -197,7 +203,7 @@ describe('GmailOAuthService', () => {
       const state = signState(7, '-1s');
 
       await expect(
-        service.handleOAuthCallback('auth-code', state),
+        service.completeOAuth(7, 'auth-code', state),
       ).rejects.toMatchObject({ reason: 'invalid_state' });
     });
 
@@ -207,7 +213,7 @@ describe('GmailOAuthService', () => {
       );
 
       await expect(
-        service.handleOAuthCallback('auth-code', signState(7)),
+        service.completeOAuth(7, 'auth-code', signState(7)),
       ).rejects.toMatchObject({ reason: 'exchange_failed' });
     });
 
@@ -216,7 +222,7 @@ describe('GmailOAuthService', () => {
       httpService.post.mockReturnValue(throwError(() => networkError));
 
       await expect(
-        service.handleOAuthCallback('auth-code', signState(7)),
+        service.completeOAuth(7, 'auth-code', signState(7)),
       ).rejects.toMatchObject({ reason: 'google_unavailable' });
     });
   });

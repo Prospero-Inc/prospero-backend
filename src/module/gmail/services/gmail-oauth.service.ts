@@ -24,7 +24,6 @@ import {
   GmailConnectionStatusResponse,
   GmailConnectionWriteData,
   GmailOAuthCallbackError,
-  GmailOAuthOutcome,
   GoogleTokenResponse,
   OAuthStatePayload,
 } from '../types';
@@ -61,27 +60,26 @@ export class GmailOAuthService {
     return `${GMAIL_AUTHORIZE_URL}?${params.toString()}`;
   }
 
-  /** Builds the URL the browser is redirected to once the callback is done, with the outcome. */
-  buildRedirectUrl(outcome: GmailOAuthOutcome): string {
-    const url = new URL(process.env.GMAIL_OAUTH_SUCCESS_REDIRECT_URL);
-
-    if (outcome === 'connected') {
-      url.searchParams.set('gmail', 'connected');
-    } else {
-      url.searchParams.set('gmail', 'error');
-      url.searchParams.set('reason', outcome);
-    }
-
-    return url.toString();
-  }
-
   /**
    * Verifies `state`, exchanges `code` for tokens, encrypts and persists them.
+   * `userId` is the session of the browser that came back from Google: the
+   * state must belong to that same user, otherwise someone could start the
+   * flow on their account and get a victim to approve it, linking the
+   * victim's mailbox to the attacker's account.
    * Throws `GmailOAuthCallbackError` with a short, stable `reason` on any
    * failure — never lets a raw axios/Google error escape.
    */
-  async handleOAuthCallback(code: string, state: string): Promise<void> {
-    const userId = this.verifyOAuthState(state);
+  async completeOAuth(
+    userId: number,
+    code: string,
+    state: string,
+  ): Promise<void> {
+    if (this.verifyOAuthState(state) !== userId) {
+      throw new GmailOAuthCallbackError(
+        'invalid_state',
+        'OAuth state belongs to another user',
+      );
+    }
     const tokenResponse = await this.exchangeCodeForTokens(code);
     const existing = await this.connectionRepository.findByUserId(userId);
 

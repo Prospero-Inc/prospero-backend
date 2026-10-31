@@ -134,14 +134,14 @@ describe('AuthService', () => {
       expect(expiresAt.getTime() - before).toBeLessThan(61 * 60 * 1000);
     });
 
-    it('throws UnprocessableEntityException when the mailer fails', async () => {
+    it('answers like an unknown email even when the mailer fails', async () => {
       userService.findOneByEmail.mockResolvedValue(activeUser);
       userService.updateResetPasswordToken.mockResolvedValue(activeUser);
       mailService.sendResetPassword.mockRejectedValue(new Error('smtp down'));
 
       await expect(
         service.requestResetPassword({ email: activeUser.email }),
-      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -259,7 +259,7 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('throws when the password does not match', async () => {
-      userService.findOne.mockResolvedValue(activeUser);
+      userService.findOneByEmail.mockResolvedValue(activeUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(
@@ -267,8 +267,36 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
+    it('answers an unknown email exactly like a wrong password, after a bcrypt compare', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      userService.findOneByEmail.mockResolvedValueOnce(activeUser);
+      const wrongPassword = await service
+        .login({ email: activeUser.email, password: 'wrong' })
+        .catch((error) => error);
+      userService.findOneByEmail.mockResolvedValueOnce(null);
+      const unknownEmail = await service
+        .login({ email: 'nobody@example.com', password: 'wrong' })
+        .catch((error) => error);
+
+      expect(unknownEmail).toBeInstanceOf(UnauthorizedException);
+      expect(unknownEmail.getResponse()).toEqual(wrongPassword.getResponse());
+      expect(bcrypt.compare).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects a password-less (Google) account even if bcrypt matched', async () => {
+      userService.findOneByEmail.mockResolvedValue({
+        ...activeUser,
+        password: null,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ email: activeUser.email, password: 'anything' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
     it('returns an access token and a refresh token directly when 2FA is disabled', async () => {
-      userService.findOne.mockResolvedValue(activeUser);
+      userService.findOneByEmail.mockResolvedValue(activeUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jwtService.sign.mockReturnValue('real-access-token');
       refreshTokenRepository.create.mockResolvedValue({});
@@ -307,7 +335,7 @@ describe('AuthService', () => {
         enable2FA: true,
         twoFASecret: 'SECRET',
       };
-      userService.findOne.mockResolvedValue(twoFaUser);
+      userService.findOneByEmail.mockResolvedValue(twoFaUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jwtService.sign.mockReturnValue('pre-auth-token');
 
