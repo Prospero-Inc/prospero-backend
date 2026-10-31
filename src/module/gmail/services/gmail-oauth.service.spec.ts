@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { of, throwError } from 'rxjs';
 import { AxiosError } from 'axios';
 import { GmailConnectionStatus } from '@prisma/client';
@@ -99,8 +99,10 @@ describe('GmailOAuthService', () => {
   });
 
   describe('completeOAuth', () => {
-    const signState = (userId: number, expiresIn: string | number = '5m') =>
-      jwtService.sign({ userId, typ: 'oauth_state' }, { expiresIn });
+    const signState = (
+      userId: number,
+      expiresIn: JwtSignOptions['expiresIn'] = '5m',
+    ) => jwtService.sign({ userId, typ: 'oauth_state' }, { expiresIn });
 
     it('first connection, with refresh_token: creates the row with correctly encrypted tokens', async () => {
       repository.findByUserId.mockResolvedValue(null);

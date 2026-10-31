@@ -15,6 +15,7 @@ import { FinancialInstitutionsModule } from './module/financial-institutions/fin
 import { GmailModule } from './module/gmail/gmail.module';
 import { GmailSyncModule } from './module/gmail-sync/gmail-sync.module';
 import { ReviewQueueModule } from './module/review-queue/review-queue.module';
+import { HealthModule } from './module/health/health.module';
 import { NotificationsModule } from './module/notifications/notifications.module';
 
 @Module({
@@ -43,6 +44,7 @@ import { NotificationsModule } from './module/notifications/notifications.module
     GmailSyncModule,
     ReviewQueueModule,
     NotificationsModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [

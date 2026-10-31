@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm install                # install deps
+npm install                # install deps (Node 22, see package.json engines)
 npm run start:dev          # dev server with watch mode (http://localhost:3000)
 npm run build               # nest build
 npm run start:prod          # run compiled dist/main
@@ -218,6 +218,16 @@ missing:
 
 Confirm with the co-founder before building any of the still-missing items — treat them as
 separate planned phases, not something to start opportunistically.
+
+### Health and deploy
+
+`GET /api/health` (`module/health`, unthrottled, public) answers 200 only if Postgres responds
+to `SELECT 1`, else 503. `docker-compose.yml`'s healthcheck probes it with Node's `fetch` (the
+slim image has no curl). The deploy job deploys the image tagged with the commit SHA
+(`IMAGE_TAG`, never `latest`), tags the running image as `:rollback` first, runs
+`docker compose up -d --wait` (no `down`) and, if the new container never turns healthy, brings
+`:rollback` back up. Migrations run before the swap, so they must stay backwards compatible
+(expand → migrate → contract) for a rollback to be safe.
 
 ### Config
 

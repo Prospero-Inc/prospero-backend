@@ -108,6 +108,10 @@ describe('Auth flows (e2e, Postgres)', () => {
     clientIp = `198.51.100.${ipCounter}`;
   });
 
+  it('reports healthy when Postgres is reachable', async () => {
+    await get('/api/health').expect(200, { status: 'ok' });
+  });
+
   describe('signup and login', () => {
     it('activates the account through the emailed link and logs in', async () => {
       const email = await createActiveUser('signup');

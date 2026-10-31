@@ -35,6 +35,8 @@ export type I18nTranslations = {
         "cursorInvalidDate": string;
         "cursorInvalidNumber": string;
         "apiUnauthorizedResponse": string;
+        "errorVerifyingToken": string;
+        "twoFactorAlreadyEnabled": string;
     };
     "validation": {
         "NOT_EMPTY": string;
