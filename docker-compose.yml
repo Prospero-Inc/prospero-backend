@@ -27,8 +27,11 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT}
+    # Loopback only: Caddy (on the host) and the Next server (on the
+    # `prospero` network) are the only clients. Publishing on every interface
+    # let anyone skip Caddy, and `trust proxy` assumes private sources are ours.
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     networks:
       - prospero
 

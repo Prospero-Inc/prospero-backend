@@ -242,39 +242,55 @@ export class UserService {
     });
   }
 
-  async updateResetPasswordToken(id: number, resetPasswordToken: string) {
+  async updateResetPasswordToken(
+    id: number,
+    resetPasswordTokenHash: string,
+    resetPasswordExpiresAt: Date,
+  ) {
     return await this.prisma.user.update({
       where: {
         id,
       },
       data: {
-        resetPasswordToken,
+        resetPasswordToken: resetPasswordTokenHash,
+        resetPasswordExpiresAt,
       },
     });
   }
 
-  async findOneByResetPasswordToken(resetPasswordToken: string): Promise<User> {
+  /**
+   * Sets the new password and burns the reset token in one conditional
+   * update: only matches while the token is still unused and unexpired, so
+   * two concurrent requests with the same link can't both succeed.
+   * Returns the user whose password changed, or null if the link is invalid.
+   */
+  async resetPasswordWithToken(
+    resetPasswordTokenHash: string,
+    password: string,
+    now: Date,
+  ): Promise<{ userId: number } | null> {
     const user = await this.prisma.user.findFirst({
       where: {
-        resetPasswordToken,
+        resetPasswordToken: resetPasswordTokenHash,
+        resetPasswordExpiresAt: { gt: now },
       },
+      select: { id: true },
     });
+    if (!user) return null;
 
-    if (!user) {
-      throw new UnauthorizedException('Could not find user');
-    }
-    return user;
-  }
-
-  async updatePassword(id: number, password: string) {
-    return await this.prisma.user.update({
+    const { count } = await this.prisma.user.updateMany({
       where: {
-        id,
+        id: user.id,
+        resetPasswordToken: resetPasswordTokenHash,
+        resetPasswordExpiresAt: { gt: now },
       },
       data: {
         password,
         resetPasswordToken: null,
+        resetPasswordExpiresAt: null,
       },
     });
+
+    return count === 1 ? { userId: user.id } : null;
   }
 }

@@ -28,6 +28,7 @@ describe('AuthService', () => {
     disable2FA: jest.Mock;
     findOneByEmail: jest.Mock;
     updateResetPasswordToken: jest.Mock;
+    resetPasswordWithToken: jest.Mock;
     updateActivationToken: jest.Mock;
   };
   let mailService: {
@@ -66,6 +67,7 @@ describe('AuthService', () => {
       disable2FA: jest.fn(),
       findOneByEmail: jest.fn(),
       updateResetPasswordToken: jest.fn(),
+      resetPasswordWithToken: jest.fn(),
       updateActivationToken: jest.fn(),
     };
     mailService = {
@@ -112,20 +114,24 @@ describe('AuthService', () => {
       expect(mailService.sendResetPassword).not.toHaveBeenCalled();
     });
 
-    it('stores a uuid token and mails the same token for a known email', async () => {
+    it('mails a uuid token but stores only its hash, valid for 60 minutes', async () => {
       userService.findOneByEmail.mockResolvedValue(activeUser);
       userService.updateResetPasswordToken.mockResolvedValue(activeUser);
       mailService.sendResetPassword.mockResolvedValue(undefined);
+      const before = Date.now();
 
       await service.requestResetPassword({ email: activeUser.email });
 
-      const [id, token] = userService.updateResetPasswordToken.mock.calls[0];
+      const [, mailedToken] = mailService.sendResetPassword.mock.calls[0];
+      const [id, storedToken, expiresAt] =
+        userService.updateResetPasswordToken.mock.calls[0];
+      expect(mailedToken).toMatch(uuidV4);
       expect(id).toBe(activeUser.id);
-      expect(token).toMatch(uuidV4);
-      expect(mailService.sendResetPassword).toHaveBeenCalledWith(
-        activeUser,
-        token,
+      expect(storedToken).toBe(hash(mailedToken));
+      expect(expiresAt.getTime() - before).toBeGreaterThanOrEqual(
+        60 * 60 * 1000,
       );
+      expect(expiresAt.getTime() - before).toBeLessThan(61 * 60 * 1000);
     });
 
     it('throws UnprocessableEntityException when the mailer fails', async () => {
@@ -136,6 +142,40 @@ describe('AuthService', () => {
       await expect(
         service.requestResetPassword({ email: activeUser.email }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+  });
+
+  describe('resetPassword', () => {
+    const token = '0b8a3f1e-6c2d-4f4a-9b1e-2d3c4b5a6f70';
+
+    it('looks the link up by hash, sets the password and revokes sessions', async () => {
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+      userService.resetPasswordWithToken.mockResolvedValue({ userId: 1 });
+
+      await service.resetPassword({
+        resetPasswordToken: token,
+        password: 'N3w-password',
+      });
+
+      expect(userService.resetPasswordWithToken).toHaveBeenCalledWith(
+        hash(token),
+        'new-hash',
+        expect.any(Date),
+      );
+      expect(refreshTokenRepository.revokeAllForUser).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects an unknown, expired or already used link', async () => {
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+      userService.resetPasswordWithToken.mockResolvedValue(null);
+
+      await expect(
+        service.resetPassword({
+          resetPasswordToken: token,
+          password: 'N3w-password',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(refreshTokenRepository.revokeAllForUser).not.toHaveBeenCalled();
     });
   });
 

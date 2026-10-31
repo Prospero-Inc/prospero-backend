@@ -4,9 +4,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
+import { TRUSTED_PROXIES } from './config/trust-proxy';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Real client IP for the throttler, see trust-proxy.ts.
+  app.set('trust proxy', TRUSTED_PROXIES);
   app.useGlobalPipes(
     new I18nValidationPipe({
       transform: true,

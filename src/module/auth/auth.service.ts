@@ -25,6 +25,7 @@ import { RefreshTokenRepository } from './repositories/refresh-token.repository'
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_DAYS,
+  RESET_PASSWORD_TTL_MS,
 } from './auth.constants';
 
 const PRE_AUTH_TOKEN_TTL = '5m';
@@ -301,10 +302,12 @@ export class AuthService {
     // can't be used to probe which emails have an account.
     if (!user) return;
 
+    // Only the hash is stored: a DB leak must not hand out working links.
     const resetPasswordToken = uuid4();
     await this.userService.updateResetPasswordToken(
       user.id,
-      resetPasswordToken,
+      this.hashToken(resetPasswordToken),
+      new Date(Date.now() + RESET_PASSWORD_TTL_MS),
     );
     try {
       await this.mailService.sendResetPassword(user, resetPasswordToken);
@@ -338,22 +341,24 @@ export class AuthService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    try {
-      const { resetPasswordToken, password } = resetPasswordDto;
-      const user: User =
-        await this.userService.findOneByResetPasswordToken(resetPasswordToken);
-      const newPassword = await bcrypt.hash(password, 10);
-
-      await this.userService.updatePassword(user.id, newPassword);
-      // Whoever forced a reset may be locking out an attacker: kill every
-      // existing session so a stolen refresh token stops working too.
-      await this.refreshTokenRepository.revokeAllForUser(user.id);
-
-      return {
-        message: `${translate('exception.passwordUpdatedSuccess')}`,
-      };
-    } catch (error) {
+    const { resetPasswordToken, password } = resetPasswordDto;
+    const newPassword = await bcrypt.hash(password, 10);
+    // Unknown, expired and already-used links all get the same answer.
+    const result = await this.userService.resetPasswordWithToken(
+      this.hashToken(resetPasswordToken),
+      newPassword,
+      new Date(),
+    );
+    if (!result) {
       throw new UnprocessableEntityException('This action can not be done');
     }
+
+    // Whoever forced a reset may be locking out an attacker: kill every
+    // existing session so a stolen refresh token stops working too.
+    await this.refreshTokenRepository.revokeAllForUser(result.userId);
+
+    return {
+      message: `${translate('exception.passwordUpdatedSuccess')}`,
+    };
   }
 }
