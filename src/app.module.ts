@@ -7,6 +7,7 @@ import { UserModule } from './module/user/user.module';
 import { SalaryModule } from './module/salary/salary.module';
 import { MailModule } from './module/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
+import { envValidationSchema } from './config/env.schema';
 import { TransactionsModule } from './module/transactions/transactions.module';
 import { PeriodsModule } from './module/periods/periods.module';
 import { FixedExpensesModule } from './module/fixed-expenses/fixed-expenses.module';
@@ -18,7 +19,7 @@ import { NotificationsModule } from './module/notifications/notifications.module
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ validationSchema: envValidationSchema }),
     // Default rate limit for every endpoint (per client IP); auth's
     // sensitive routes (signup, login, password reset — each either
     // triggers a real SMTP send or is a brute-force target) override this

@@ -12,6 +12,8 @@ import { v4 as uuid4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { MailService } from '../mail/mail.service';
 
+const SIGNUP_RESPONSE = { message: 'User created successfully' };
+
 @Injectable()
 export class UserService {
   #logger = new Logger(UserService.name);
@@ -28,6 +30,26 @@ export class UserService {
 
       const salt = await bcrypt.genSalt(10);
       const password = await bcrypt.hash(data.password, salt);
+
+      // An email that already has an account gets the same answer as a new
+      // one, after the same hashing work, so signup can't be used to probe
+      // which emails are registered. A pending account gets its verification
+      // link again (what a confused user re-registering most likely needs).
+      const existing = await this.prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        if (!existing.isActive) {
+          await this.mailService
+            .sendVerificationUsers(existing)
+            .catch((mailError) =>
+              this.#logger.error(
+                'Failed to resend verification email',
+                mailError,
+              ),
+            );
+        }
+        return SIGNUP_RESPONSE;
+      }
+
       const user = await this.prisma.user.create({
         data: {
           firstName,
@@ -50,13 +72,13 @@ export class UserService {
         this.#logger.error('Failed to send verification email', mailError);
       }
 
-      return {
-        message: 'User created successfully',
-      };
+      return SIGNUP_RESPONSE;
     } catch (error) {
       this.#logger.error('Failed to create user', error);
       if (error.code === 'P2002') {
-        throw new UnauthorizedException('Email or Username already exists');
+        // Email raced in between the check and the insert: same answer.
+        if (error.meta?.target?.includes?.('email')) return SIGNUP_RESPONSE;
+        throw new UnauthorizedException('Username already exists');
       }
       throw new UnauthorizedException('Could not create user');
     }

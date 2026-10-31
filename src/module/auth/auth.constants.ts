@@ -1,7 +1,3 @@
-export const authConstants = {
-  secret: 'NAT_12X#@',
-};
-
 /** Access token TTL, passed to `JwtModule.register`'s `signOptions.expiresIn`. */
 export const ACCESS_TOKEN_TTL = '15m';
 

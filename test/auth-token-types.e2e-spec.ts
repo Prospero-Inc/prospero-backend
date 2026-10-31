@@ -55,7 +55,7 @@ describe('Auth token types (e2e)', () => {
     };
 
     const userService = {
-      findOne: jest.fn(async () => user),
+      findOneByEmail: jest.fn(async () => user),
       findById: jest.fn(async () => user),
       findProfileById: jest.fn(async () => ({ id: user.id })),
       disable2FA: jest.fn(async () => {
