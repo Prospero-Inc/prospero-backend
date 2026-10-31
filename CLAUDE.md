@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm install                # install deps
+npm install                # install deps (Node 22, see package.json engines)
 npm run start:dev          # dev server with watch mode (http://localhost:3000)
 npm run build               # nest build
 npm run start:prod          # run compiled dist/main
@@ -128,8 +128,11 @@ through its PostgREST API. Every migration that creates a table must also run
   `@Throttle()` limits (3–5 req/min) — those are the ones that either send a real email or are
   brute-force targets, which is what actually costs money/risks abuse on a small instance.
   `POST /auth/refresh` gets a looser `@Throttle()` (10 req/min) since legitimate silent refreshes
-  from an active client are frequent. No cron/cleanup job exists yet for expired+revoked
-  `RefreshToken` rows (table grows unbounded — deferred until it's an actual size problem).
+  from an active client are frequent. `RefreshTokenCleanupScheduler` (daily 03:30) deletes expired
+  tokens and those revoked more than 30 days ago (recent revoked ones stay for reuse detection).
+  TOTP codes are single-use: `AuthService.acceptTotp` resolves the code's 30 s step
+  (`verifyDelta`, ±1 step) and `UserService.consumeTotpStep` stores it in
+  `User.twoFALastUsedStep` atomically; a step not newer than the stored one is rejected.
 - **salary** (income) — `POST /salary` (create), `PATCH /salary/:id` (edit date/amount/type,
   ownership-checked), `GET /salary/details` (current calendar-month view, spec §3.3), `GET
   /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
@@ -218,6 +221,38 @@ missing:
 
 Confirm with the co-founder before building any of the still-missing items — treat them as
 separate planned phases, not something to start opportunistically.
+
+### Money in cents (D3, in progress)
+
+Amounts are moving from `Float` units to integer cents (`../docs/plan-remediacion.md`, D3,
+expand → migrate → contract). **Current phase: double write.** `Transaction`, `Salary`,
+`FixedExpense` have `amountCents`, `ProcessedEmail` has `parsedAmountCents` (nullable).
+`PrismaService` registers a `$use` middleware (`module/money/money-columns.ts`'s `withCents`)
+that mirrors every write of the Float column into its cents twin — no repository sets cents by
+hand, and a write it can't mirror (`increment`…) throws. `toCents` (`module/money/to-cents.util.ts`)
+matches the SQL `ROUND(amount::numeric * 100)`. `MoneyIntegrityScheduler` (daily 04:15) backfills
+cents left NULL by an older container and logs mismatches; those must stay at zero for a week
+before reads switch to cents (next phase), and the Float columns are dropped after that. **Reads
+still use the Float columns.**
+
+### Scheduled jobs
+
+`ScheduleModule.forRoot()` lives in `AppModule`. Every `@Cron` runs inside
+`SchedulerLockService.runExclusive(name, ttl, job)` (`module/scheduler-lock`): a lease row in
+`scheduler_locks` (atomic `INSERT … ON CONFLICT … WHERE locked_until < NOW()`), not a Postgres
+advisory lock — production uses a transaction-mode pooler where session locks don't hold. Jobs:
+Gmail sync (hourly, 3 accounts in parallel via `mapWithConcurrency`), refresh-token cleanup,
+money integrity.
+
+### Health and deploy
+
+`GET /api/health` (`module/health`, unthrottled, public) answers 200 only if Postgres responds
+to `SELECT 1`, else 503. `docker-compose.yml`'s healthcheck probes it with Node's `fetch` (the
+slim image has no curl). The deploy job deploys the image tagged with the commit SHA
+(`IMAGE_TAG`, never `latest`), tags the running image as `:rollback` first, runs
+`docker compose up -d --wait` (no `down`) and, if the new container never turns healthy, brings
+`:rollback` back up. Migrations run before the swap, so they must stay backwards compatible
+(expand → migrate → contract) for a rollback to be safe.
 
 ### Config
 

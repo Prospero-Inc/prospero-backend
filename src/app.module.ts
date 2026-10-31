@@ -7,6 +7,7 @@ import { UserModule } from './module/user/user.module';
 import { SalaryModule } from './module/salary/salary.module';
 import { MailModule } from './module/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { envValidationSchema } from './config/env.schema';
 import { TransactionsModule } from './module/transactions/transactions.module';
 import { PeriodsModule } from './module/periods/periods.module';
@@ -15,11 +16,15 @@ import { FinancialInstitutionsModule } from './module/financial-institutions/fin
 import { GmailModule } from './module/gmail/gmail.module';
 import { GmailSyncModule } from './module/gmail-sync/gmail-sync.module';
 import { ReviewQueueModule } from './module/review-queue/review-queue.module';
+import { HealthModule } from './module/health/health.module';
+import { MoneyModule } from './module/money/money.module';
 import { NotificationsModule } from './module/notifications/notifications.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ validationSchema: envValidationSchema }),
+    // Cron jobs: Gmail sync, refresh-token cleanup, money integrity.
+    ScheduleModule.forRoot(),
     // Default rate limit for every endpoint (per client IP); auth's
     // sensitive routes (signup, login, password reset — each either
     // triggers a real SMTP send or is a brute-force target) override this
@@ -43,6 +48,8 @@ import { NotificationsModule } from './module/notifications/notifications.module
     GmailSyncModule,
     ReviewQueueModule,
     NotificationsModule,
+    HealthModule,
+    MoneyModule,
   ],
   controllers: [],
   providers: [

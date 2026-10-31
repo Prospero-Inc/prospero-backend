@@ -26,6 +26,7 @@ describe('AuthService', () => {
     updateSecretKey: jest.Mock;
     confirm2FA: jest.Mock;
     disable2FA: jest.Mock;
+    consumeTotpStep: jest.Mock;
     findOneByEmail: jest.Mock;
     updateResetPasswordToken: jest.Mock;
     resetPasswordWithToken: jest.Mock;
@@ -65,6 +66,7 @@ describe('AuthService', () => {
       updateSecretKey: jest.fn(),
       confirm2FA: jest.fn(),
       disable2FA: jest.fn(),
+      consumeTotpStep: jest.fn(),
       findOneByEmail: jest.fn(),
       updateResetPasswordToken: jest.fn(),
       resetPasswordWithToken: jest.fn(),
@@ -97,6 +99,7 @@ describe('AuthService', () => {
 
     service = module.get<AuthService>(AuthService);
     jest.clearAllMocks();
+    userService.consumeTotpStep.mockResolvedValue(true);
   });
 
   describe('requestResetPassword', () => {
@@ -386,6 +389,21 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
+    it('rejects a correct OTP that was already used (replay)', async () => {
+      jwtService.verify.mockReturnValue({
+        email: twoFaUser.email,
+        userId: twoFaUser.id,
+        typ: 'pre_auth',
+      });
+      userService.findById.mockResolvedValue(twoFaUser);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue({ delta: 0 });
+      userService.consumeTotpStep.mockResolvedValue(false);
+
+      await expect(
+        service.verifyLoginTwoFactor('pre-auth-token', '123456'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
     it('rejects an incorrect OTP', async () => {
       jwtService.verify.mockReturnValue({
         email: twoFaUser.email,
@@ -393,7 +411,7 @@ describe('AuthService', () => {
         typ: 'pre_auth',
       });
       userService.findById.mockResolvedValue(twoFaUser);
-      (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue(undefined);
 
       await expect(
         service.verifyLoginTwoFactor('pre-auth-token', '000000'),
@@ -407,7 +425,7 @@ describe('AuthService', () => {
         typ: 'pre_auth',
       });
       userService.findById.mockResolvedValue(twoFaUser);
-      (speakeasy.totp.verify as jest.Mock).mockReturnValue(true);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue({ delta: 0 });
       jwtService.sign.mockReturnValue('real-access-token');
       refreshTokenRepository.create.mockResolvedValue({});
 
@@ -461,7 +479,7 @@ describe('AuthService', () => {
         enable2FA: false,
         twoFASecret: 'PENDINGSECRET',
       });
-      (speakeasy.totp.verify as jest.Mock).mockReturnValue(true);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue({ delta: 0 });
 
       await expect(service.validate2FAToken(1, '123456')).resolves.toEqual({
         verified: true,
@@ -475,7 +493,7 @@ describe('AuthService', () => {
         enable2FA: false,
         twoFASecret: 'PENDINGSECRET',
       });
-      (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue(undefined);
 
       await expect(service.validate2FAToken(1, '000000')).resolves.toEqual({
         verified: false,
@@ -493,7 +511,7 @@ describe('AuthService', () => {
       await expect(service.validate2FAToken(1, '123456')).resolves.toEqual({
         verified: false,
       });
-      expect(speakeasy.totp.verify).not.toHaveBeenCalledWith(
+      expect(speakeasy.totp.verifyDelta).not.toHaveBeenCalledWith(
         expect.objectContaining({ token: '123456', secret: null }),
       );
     });
@@ -521,7 +539,7 @@ describe('AuthService', () => {
 
     it('keeps 2FA on when the code is wrong', async () => {
       userService.findById.mockResolvedValue(twoFaUser);
-      (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue(undefined);
 
       await expect(service.disable2FA(1, '000000')).rejects.toBeInstanceOf(
         UnauthorizedException,
@@ -531,11 +549,11 @@ describe('AuthService', () => {
 
     it('turns 2FA off with a valid code', async () => {
       userService.findById.mockResolvedValue(twoFaUser);
-      (speakeasy.totp.verify as jest.Mock).mockReturnValue(true);
+      (speakeasy.totp.verifyDelta as jest.Mock).mockReturnValue({ delta: 0 });
 
       await service.disable2FA(1, '123456');
 
-      expect(speakeasy.totp.verify).toHaveBeenCalledWith(
+      expect(speakeasy.totp.verifyDelta).toHaveBeenCalledWith(
         expect.objectContaining({ secret: 'ACTIVESECRET', token: '123456' }),
       );
       expect(userService.disable2FA).toHaveBeenCalledWith(1);

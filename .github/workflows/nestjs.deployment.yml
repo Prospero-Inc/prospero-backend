@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.16.0]
+        node-version: [22.23.4]
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +68,9 @@ jobs:
     # interpolate docker-compose.yml's ${VAR} references.
     env:
       DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      # Deploy exactly the image built from this commit, never `latest`;
+      # docker-compose.yml reads it as ${IMAGE_TAG}.
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - uses: actions/checkout@v4
@@ -85,23 +88,66 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull latest image
+      - name: Keep the running image for rollback
+        # Tag whatever is running now as :rollback before anything changes,
+        # so a failed deploy can go back to it in one command. No-op on the
+        # very first deploy (no container yet).
+        run: |
+          RUNNING=$(docker inspect --format '{{.Image}}' prospero-service 2>/dev/null || true)
+          if [ -n "$RUNNING" ]; then docker tag "$RUNNING" ${{ env.IMAGE }}:rollback; fi
+
+      - name: Pull this commit's image
         run: doppler run -- docker compose pull
 
       - name: Run Prisma migrations
         # prisma is a devDependency, so it's not in the production image's
         # node_modules — npx fetches it fresh. Keep this version pin in
         # sync with package.json's "prisma"/"@prisma/client" version to
-        # avoid a CLI/client mismatch.
+        # avoid a CLI/client mismatch. Migrations must stay backwards
+        # compatible (expand → migrate → contract) so a rollback still works.
         run: |
           doppler run -- docker run --rm -e DATABASE_URL -e DIRECT_URL --network prospero \
-            ${{ env.IMAGE }}:latest npx --yes prisma@5.16.1 migrate deploy
+            ${{ env.IMAGE }}:${{ env.IMAGE_TAG }} npx --yes prisma@5.16.1 migrate deploy
 
-      - name: Stop existing container
-        run: doppler run -- docker compose down
+      - name: Deploy and wait until healthy
+        id: deploy
+        # No `down` first: compose recreates the container in place, so the
+        # outage is just the new container's startup instead of
+        # pull + stop + start. Then waits for docker-compose.yml's healthcheck
+        # (GET /api/health, which checks the database).
+        run: |
+          doppler run -- docker compose up -d
+          # Polls the container's healthcheck instead of `compose up --wait`,
+          # which needs Compose v2.17+ on the server.
+          for i in $(seq 1 24); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' prospero-service 2>/dev/null || echo missing)
+            if [ "$status" = healthy ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::prospero-service never became healthy (last status: $status)"
+          exit 1
 
-      - name: Deploy Docker container
-        run: doppler run -- docker compose up -d
+      - name: Roll back to the previous image
+        if: failure() && steps.deploy.outcome == 'failure'
+        run: |
+          echo "::error::New image failed its health check, rolling back"
+          docker logs --tail 100 prospero-service || true
+          IMAGE_TAG=rollback doppler run -- docker compose up -d
+          # Polls the container's healthcheck instead of `compose up --wait`,
+          # which needs Compose v2.17+ on the server.
+          for i in $(seq 1 24); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' prospero-service 2>/dev/null || echo missing)
+            if [ "$status" = healthy ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::prospero-service never became healthy (last status: $status)"
+          exit 1
 
       - name: Clean up old images
-        run: docker image prune -a -f
+        # Keep the image just deployed and :rollback; drop older commit tags
+        # (an image still in use by a container can't be removed — fine).
+        run: |
+          docker images ${{ env.IMAGE }} --format '{{.Tag}} {{.ID}}' \
+            | awk -v keep="${{ env.IMAGE_TAG }}" '$1 != keep && $1 != "rollback" && $1 != "latest" {print $2}' \
+            | sort -u | xargs -r docker rmi || true
+          docker image prune -f

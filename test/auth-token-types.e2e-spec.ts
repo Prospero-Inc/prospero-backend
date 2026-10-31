@@ -31,6 +31,13 @@ describe('Auth token types (e2e)', () => {
   const totpSecret = speakeasy.generateSecret().base32;
   const currentCode = () =>
     speakeasy.totp({ secret: totpSecret, encoding: 'base32' });
+  // Codes are single-use per 30 s step; this is the next step's code.
+  const nextStepCode = () =>
+    speakeasy.totp({
+      secret: totpSecret,
+      encoding: 'base32',
+      time: Math.floor(Date.now() / 1000) + 30,
+    });
 
   let user: Record<string, unknown>;
 
@@ -56,6 +63,13 @@ describe('Auth token types (e2e)', () => {
 
     const userService = {
       findOneByEmail: jest.fn(async () => user),
+      // Same contract as the real one: a step is accepted once.
+      consumeTotpStep: jest.fn(async (_id: number, step: number) => {
+        const last = user.twoFALastUsedStep as number | undefined;
+        if (last !== undefined && step <= last) return false;
+        user.twoFALastUsedStep = step;
+        return true;
+      }),
       findById: jest.fn(async () => user),
       findProfileById: jest.fn(async () => ({ id: user.id })),
       disable2FA: jest.fn(async () => {
@@ -196,7 +210,7 @@ describe('Auth token types (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/disable-2fa')
         .set('Authorization', `Bearer ${accessToken}`)
-        .send({ token: currentCode() })
+        .send({ token: nextStepCode() })
         .expect(200);
       expect(user.enable2FA).toBe(false);
     });
