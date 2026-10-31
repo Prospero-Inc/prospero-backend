@@ -102,7 +102,7 @@ describe('GmailOAuthService', () => {
 
   describe('handleOAuthCallback', () => {
     const signState = (userId: number, expiresIn: string | number = '5m') =>
-      jwtService.sign({ userId, purpose: 'gmailOauthState' }, { expiresIn });
+      jwtService.sign({ userId, typ: 'oauth_state' }, { expiresIn });
 
     it('first connection, with refresh_token: creates the row with correctly encrypted tokens', async () => {
       repository.findByUserId.mockResolvedValue(null);
@@ -176,7 +176,7 @@ describe('GmailOAuthService', () => {
       const otherJwtService = new JwtService({ secret: 'another-secret' });
       const foreignState = otherJwtService.sign({
         userId: 7,
-        purpose: 'gmailOauthState',
+        typ: 'oauth_state',
       });
 
       await expect(
@@ -185,8 +185,8 @@ describe('GmailOAuthService', () => {
       expect(repository.create).not.toHaveBeenCalled();
     });
 
-    it('state with the wrong purpose claim: throws invalid_state', async () => {
-      const state = jwtService.sign({ userId: 7, purpose: 'somethingElse' });
+    it('state with the wrong typ claim: throws invalid_state', async () => {
+      const state = jwtService.sign({ userId: 7, typ: 'access' });
 
       await expect(
         service.handleOAuthCallback('auth-code', state),

@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -11,7 +12,7 @@ import { LoginDTO } from '../user/dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import * as speakeasy from 'speakeasy';
-import { Enable2FAType } from './types';
+import { Enable2FAType, PayloadType, TOKEN_TYPE } from './types';
 import { ActivateUserDto, ResendVerificationDto } from './dto';
 import { User } from '@prisma/client';
 import { AccessTokenResponse, RequiresTwoFactorResponse } from './interfaces';
@@ -20,7 +21,6 @@ import { MailService } from '../mail/mail.service';
 import { v4 as uuid4 } from 'uuid';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { translate } from 'src/lib/i18n';
-import { PayloadType } from './types';
 import { RefreshTokenRepository } from './repositories/refresh-token.repository';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -62,7 +62,7 @@ export class AuthService {
 
     if (user.enable2FA && user.twoFASecret) {
       const preAuthToken = this.jwtService.sign(
-        { email: user.email, userId: user.id, pending2FA: true },
+        { email: user.email, userId: user.id, typ: TOKEN_TYPE.PreAuth },
         { expiresIn: PRE_AUTH_TOKEN_TTL },
       );
 
@@ -89,21 +89,15 @@ export class AuthService {
       );
     }
 
-    if (!payload.pending2FA) {
+    if (payload.typ !== TOKEN_TYPE.PreAuth) {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
       );
     }
 
     const user = await this.userService.findById(payload.userId);
-    const verified = speakeasy.totp.verify({
-      secret: user.twoFASecret,
-      token,
-      encoding: 'base32',
-      window: 1,
-    });
 
-    if (!verified) {
+    if (!this.isValidTotp(user.twoFASecret, token)) {
       throw new UnauthorizedException(
         translate('exception.errorVerifyingToken'),
       );
@@ -176,7 +170,11 @@ export class AuthService {
   private async buildAccessTokenResponse(
     user: User,
   ): Promise<AccessTokenResponse> {
-    const payload = { email: user.email, userId: user.id };
+    const payload: PayloadType = {
+      email: user.email,
+      userId: user.id,
+      typ: TOKEN_TYPE.Access,
+    };
     const refreshToken = await this.issueRefreshToken(user.id);
 
     return {
@@ -213,8 +211,12 @@ export class AuthService {
 
   async enable2FA(userId: number): Promise<Enable2FAType> {
     const user = await this.userService.findById(userId);
+    // Never hand the secret out again once it is active: an access token
+    // alone must not be enough to clone the user's authenticator.
     if (user.enable2FA) {
-      return { secret: user.twoFASecret, qr: user.qr2FA };
+      throw new ConflictException(
+        translate('exception.twoFactorAlreadyEnabled'),
+      );
     }
 
     // Pending until validate2FAToken confirms a code — see
@@ -240,12 +242,7 @@ export class AuthService {
         return { verified: false };
       }
 
-      const verified = speakeasy.totp.verify({
-        secret: user.twoFASecret,
-        token: token,
-        encoding: 'base32',
-        window: 1,
-      });
+      const verified = this.isValidTotp(user.twoFASecret, token);
 
       // First correct code from the pending secret: this is what actually
       // turns 2FA on (enable2FA only stores the secret).
@@ -261,8 +258,28 @@ export class AuthService {
     }
   }
 
-  async disable2FA(userId: number) {
+  /** Requires a current TOTP code, so a stolen access token cannot turn 2FA off. */
+  async disable2FA(userId: number, token: string) {
+    const user = await this.userService.findById(userId);
+
+    if (!user.enable2FA || !this.isValidTotp(user.twoFASecret, token)) {
+      throw new UnauthorizedException(
+        translate('exception.errorVerifyingToken'),
+      );
+    }
+
     return await this.userService.disable2FA(userId);
+  }
+
+  private isValidTotp(secret: string | null, token: string): boolean {
+    if (!secret) return false;
+
+    return speakeasy.totp.verify({
+      secret,
+      token,
+      encoding: 'base32',
+      window: 1,
+    });
   }
 
   async activateUser(activateUserDto: ActivateUserDto) {
