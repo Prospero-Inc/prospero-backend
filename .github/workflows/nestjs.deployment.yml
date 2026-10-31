@@ -113,16 +113,35 @@ jobs:
         id: deploy
         # No `down` first: compose recreates the container in place, so the
         # outage is just the new container's startup instead of
-        # pull + stop + start. --wait blocks on docker-compose.yml's
-        # healthcheck (GET /api/health, which checks the database).
-        run: doppler run -- docker compose up -d --wait --wait-timeout 120
+        # pull + stop + start. Then waits for docker-compose.yml's healthcheck
+        # (GET /api/health, which checks the database).
+        run: |
+          doppler run -- docker compose up -d
+          # Polls the container's healthcheck instead of `compose up --wait`,
+          # which needs Compose v2.17+ on the server.
+          for i in $(seq 1 24); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' prospero-service 2>/dev/null || echo missing)
+            if [ "$status" = healthy ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::prospero-service never became healthy (last status: $status)"
+          exit 1
 
       - name: Roll back to the previous image
         if: failure() && steps.deploy.outcome == 'failure'
         run: |
           echo "::error::New image failed its health check, rolling back"
           docker logs --tail 100 prospero-service || true
-          IMAGE_TAG=rollback doppler run -- docker compose up -d --wait --wait-timeout 120
+          IMAGE_TAG=rollback doppler run -- docker compose up -d
+          # Polls the container's healthcheck instead of `compose up --wait`,
+          # which needs Compose v2.17+ on the server.
+          for i in $(seq 1 24); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' prospero-service 2>/dev/null || echo missing)
+            if [ "$status" = healthy ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::prospero-service never became healthy (last status: $status)"
+          exit 1
 
       - name: Clean up old images
         # Keep the image just deployed and :rollback; drop older commit tags
