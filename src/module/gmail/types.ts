@@ -17,9 +17,9 @@ export interface OAuthStatePayload {
 }
 
 /**
- * Short, stable outcome codes surfaced to the frontend via
- * `GMAIL_OAUTH_SUCCESS_REDIRECT_URL`'s query params (`?gmail=connected` or
- * `?gmail=error&reason=<outcome>`).
+ * Short, stable outcome codes returned by POST /gmail/oauth/complete; the
+ * frontend's callback route turns them into `?gmail=connected` or
+ * `?gmail=error&reason=<outcome>` on the settings page.
  */
 export type GmailOAuthOutcome =
   | 'connected'

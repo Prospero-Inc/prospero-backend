@@ -5,19 +5,18 @@ import {
   Get,
   HttpCode,
   Patch,
-  Query,
+  Post,
   Request,
-  Res,
   UseGuards,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-guard';
 import { GmailOAuthService } from '../services/gmail-oauth.service';
-import { UpdateGmailPreferencesDto } from '../dto';
+import { CompleteGmailOAuthDto, UpdateGmailPreferencesDto } from '../dto';
 import {
   GmailConnectionStatusResponse,
   GmailOAuthCallbackError,
+  GmailOAuthOutcome,
 } from '../types';
 
 @ApiTags('gmail')
@@ -33,36 +32,28 @@ export class GmailController {
     return { url };
   }
 
-  // No guard: this route is hit by the browser following Google's redirect
-  // after the user (dis)approved the consent screen, never a frontend fetch.
-  @Get('oauth/callback')
-  async callback(
-    @Query('code') code: string | undefined,
-    @Query('state') state: string | undefined,
-    @Query('error') googleError: string | undefined,
-    @Res() res: Response,
-  ): Promise<void> {
-    if (googleError) {
-      // The user cancelled/denied on Google's consent screen.
-      res.redirect(302, this.gmailOAuthService.buildRedirectUrl('cancelled'));
-      return;
-    }
-
-    if (!code || !state) {
-      res.redirect(
-        302,
-        this.gmailOAuthService.buildRedirectUrl('invalid_request'),
-      );
-      return;
-    }
-
+  // Google redirects the browser to the *frontend* (GMAIL_OAUTH_REDIRECT_URI),
+  // which forwards code+state here with that browser's session: the flow
+  // only completes for the same user who started it (see completeOAuth).
+  @Post('oauth/complete')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  async complete(
+    @Request() req,
+    @Body() dto: CompleteGmailOAuthDto,
+  ): Promise<{ outcome: GmailOAuthOutcome }> {
     try {
-      await this.gmailOAuthService.handleOAuthCallback(code, state);
-      res.redirect(302, this.gmailOAuthService.buildRedirectUrl('connected'));
+      await this.gmailOAuthService.completeOAuth(
+        req.user.userId,
+        dto.code,
+        dto.state,
+      );
+      return { outcome: 'connected' };
     } catch (err) {
-      const reason =
-        err instanceof GmailOAuthCallbackError ? err.reason : 'unknown_error';
-      res.redirect(302, this.gmailOAuthService.buildRedirectUrl(reason));
+      if (err instanceof GmailOAuthCallbackError)
+        return { outcome: err.reason };
+      throw err;
     }
   }
 
