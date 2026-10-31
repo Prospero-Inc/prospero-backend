@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsUUID, Matches } from 'class-validator';
+import { PASSWORD_POLICY_MESSAGE, PASSWORD_REGEX } from '../password-policy';
 
 export class ResetPasswordDto {
   @ApiProperty()
@@ -8,12 +9,6 @@ export class ResetPasswordDto {
   resetPasswordToken: string;
 
   @ApiProperty()
-  // Same rule the signup form (prospero-front RegisterView) and the
-  // change-password SPA enforce. The old backend-only rule (special chars
-  // limited to [-_*.], max 16) rejected passwords both UIs accept.
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/, {
-    message:
-      'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.',
-  })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_POLICY_MESSAGE })
   password: string;
 }

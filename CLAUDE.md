@@ -113,7 +113,14 @@ through its PostgREST API. Every migration that creates a table must also run
   decoded JWTs without verifying their signature — a real auth bypass — and was removed);
   `role-auth.guard.ts` was also removed as dead code (it referenced a `role` field that doesn't
   exist on `User`). App-wide rate limiting is `@nestjs/throttler`, wired as a global `APP_GUARD`
-  in `app.module.ts` (60 req/min/IP default). `signup`, `login`, `login/verify-2fa`,
+  in `app.module.ts` (60 req/min/IP default). The IP is the real client's: `main.ts` sets
+  Express `trust proxy` to `TRUSTED_PROXIES` (`config/trust-proxy.ts`: loopback + private
+  ranges, i.e. Caddy via the Docker gateway and the Next server on the `prospero` network,
+  which forwards `X-Forwarded-For`); the port is published on `127.0.0.1` only. `POST
+  /auth/login` also has `LoginEmailThrottleGuard` (5 attempts / 15 min per email, on the
+  throttler's storage). Password-reset links store only the token's SHA-256 plus
+  `resetPasswordExpiresAt` (60 min) and are burned atomically by
+  `UserService.resetPasswordWithToken`. Signup and reset share `auth/password-policy.ts`. `signup`, `login`, `login/verify-2fa`,
   `request-reset-password`, and `reset-password/:token` override it with tighter per-route
   `@Throttle()` limits (3–5 req/min) — those are the ones that either send a real email or are
   brute-force targets, which is what actually costs money/risks abuse on a small instance.

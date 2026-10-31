@@ -4,9 +4,14 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { i18nValidationMessage } from 'nestjs-i18n';
+import {
+  PASSWORD_POLICY_MESSAGE,
+  PASSWORD_REGEX,
+} from '../../auth/password-policy';
 
 export class CreateUserDTO {
   @ApiProperty({
@@ -42,10 +47,11 @@ export class CreateUserDTO {
 
   @ApiProperty({
     description: 'Contraseña del usuario',
-    example: 'StrongPassword123',
+    example: 'Str0ng-Passw0rd',
   })
   @IsString()
   @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_POLICY_MESSAGE })
   password: string;
 
   @IsOptional()
