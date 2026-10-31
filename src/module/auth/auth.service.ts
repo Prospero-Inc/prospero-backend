@@ -30,6 +30,14 @@ import {
 
 const PRE_AUTH_TOKEN_TTL = '5m';
 
+/**
+ * bcrypt hash (cost 10, same as real ones) compared against when the email
+ * has no password to check, so an unknown email takes as long as a wrong
+ * password and the two can't be told apart by timing.
+ */
+const DUMMY_PASSWORD_HASH =
+  '$2b$10$zGBlx7lp6M9KiXQfKpEZrOqvdyeu4MiTXRm396.BtraJAMf0FSpcW';
+
 @Injectable()
 export class AuthService {
   #logger = new Logger(AuthService.name);
@@ -44,14 +52,15 @@ export class AuthService {
   async login(
     loginDTO: LoginDTO,
   ): Promise<AccessTokenResponse | RequiresTwoFactorResponse> {
-    const user = await this.userService.findOne(loginDTO.email);
-
+    // Unknown email, password-less (Google) account and wrong password all
+    // get the same answer after the same bcrypt work.
+    const user = await this.userService.findOneByEmail(loginDTO.email);
     const passwordMatched = await bcrypt.compare(
       loginDTO.password,
-      user.password,
+      user?.password ?? DUMMY_PASSWORD_HASH,
     );
 
-    if (!passwordMatched) {
+    if (!user?.password || !passwordMatched) {
       throw new UnauthorizedException(
         translate('exception.invalidCredentials'),
       );
@@ -309,12 +318,14 @@ export class AuthService {
       this.hashToken(resetPasswordToken),
       new Date(Date.now() + RESET_PASSWORD_TTL_MS),
     );
-    try {
-      await this.mailService.sendResetPassword(user, resetPasswordToken);
-    } catch (error) {
-      this.#logger.error('Failed to send reset-password email', error);
-      throw new UnprocessableEntityException('This action can not be done');
-    }
+    // Not awaited: waiting on SMTP made known emails answer measurably
+    // slower than unknown ones. A failed send is only logged; the user can
+    // simply ask again.
+    this.mailService
+      .sendResetPassword(user, resetPasswordToken)
+      .catch((error) =>
+        this.#logger.error('Failed to send reset-password email', error),
+      );
   }
 
   async resendVerification({ email }: ResendVerificationDto) {
