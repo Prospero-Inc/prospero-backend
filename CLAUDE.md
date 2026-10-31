@@ -85,10 +85,13 @@ through its PostgREST API. Every migration that creates a table must also run
   `AuthService.verifyLoginTwoFactor`. TOTP 2FA itself uses `speakeasy`. **Every JWT carries a
   `typ` claim** (`TOKEN_TYPE` in `auth/types.ts`: `access` | `pre_auth` | `oauth_state`) because
   they all share `SECRET`: `JwtStrategy.validate` accepts only `access`, `verifyLoginTwoFactor`
-  only `pre_auth`, the Gmail OAuth callback only `oauth_state` — without it a preAuthToken or a
+  only `pre_auth`, Gmail's `completeOAuth` only `oauth_state` — without it a preAuthToken or a
   Gmail `state` worked as a session token (2FA bypass, fixed in Fase 0 of
   `../docs/plan-remediacion.md`, covered by `test/auth-token-types.e2e-spec.ts`). Any new JWT
-  must declare its own `typ`. `GET /auth/enable-2fa` returns 409 once 2FA is active (never
+  must declare its own `typ`. The Gmail OAuth flow is bound to the user who started it: Google
+  redirects to the **frontend** (`GMAIL_OAUTH_REDIRECT_URI` = `<front>/api/gmail/callback`),
+  which forwards `code`+`state` with that browser's session to `POST /gmail/oauth/complete`;
+  `completeOAuth` rejects a state whose `userId` isn't the session's (`invalid_state`). `GET /auth/enable-2fa` returns 409 once 2FA is active (never
   re-sends the secret) and `POST /auth/disable-2fa` requires a valid TOTP code in `{ token }`.
   Access + refresh tokens (design doc: `../docs/auth-refresh-tokens.md`): the signed JWT
   `accessToken` (`{ email, userId }`, HS256 via `SECRET`) now expires in **15 minutes**
