@@ -34,7 +34,9 @@ model User {
   email                  String                  @unique
   lastName               String?                 @map("last_name")
   firstName              String?                 @map("first_name")
+  /// SHA-256 of the emailed reset token, never the raw value.
   resetPasswordToken     String?                 @map("reset_password_token")
+  resetPasswordExpiresAt DateTime?               @map("reset_password_expires_at")
   payFrequency           PayFrequency            @default(Biweekly) @map("pay_frequency")
   needsPercent           Float                   @default(0.5) @map("needs_percent")
   wantsPercent           Float                   @default(0.3) @map("wants_percent")

@@ -18,6 +18,7 @@ import { CreateUserDTO } from '../user/dto/create-user.dto';
 import { UpdateUserDto } from '../user/dto/update-user.dto';
 import { LoginDTO } from '../user/dto/login.dto';
 import { JwtAuthGuard } from './jwt-guard';
+import { LoginEmailThrottleGuard } from './guards/login-email-throttle.guard';
 import { Enable2FAType } from './types';
 import { ValidateTokenDTO } from './dto/validate-token.dto';
 import {
@@ -60,6 +61,7 @@ export class AuthController {
 
   @Post('login')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @UseGuards(LoginEmailThrottleGuard)
   @ApiOperation({ summary: 'Iniciar sesión con un usuario registrado' })
   @ApiResponse({ status: 200, description: 'Inicio de sesión exitoso.' })
   @ApiResponse({ status: 401, description: 'Credenciales incorrectas.' })

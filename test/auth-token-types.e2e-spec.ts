@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { HttpService } from '@nestjs/axios';
 import * as request from 'supertest';
 import * as bcrypt from 'bcrypt';
@@ -67,6 +68,7 @@ describe('Auth token types (e2e)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         PassportModule,
+        ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
         JwtModule.register({
           secret: process.env.SECRET,
           signOptions: { expiresIn: ACCESS_TOKEN_TTL },
@@ -153,6 +155,17 @@ describe('Auth token types (e2e)', () => {
 
     expect(res.status).toBe(409);
     expect(JSON.stringify(res.body)).not.toContain(totpSecret);
+  });
+
+  it('blocks the 6th login attempt for the same email with 429', async () => {
+    const wrongLogin = () =>
+      request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: user.email, password: 'wrong-Passw0rd!' });
+
+    for (let i = 0; i < 5; i++) await wrongLogin().expect(401);
+
+    await wrongLogin().expect(429);
   });
 
   describe('disable-2fa', () => {
