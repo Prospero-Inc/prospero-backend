@@ -45,9 +45,9 @@ describe('FixedExpensesController', () => {
   it('lists fixed expenses scoped to the authenticated user', () => {
     const req = { user: { userId: 7 } };
 
-    controller.findAll(req);
+    controller.findAll(req, { today: '2026-10-31' });
 
-    expect(service.findAllForUser).toHaveBeenCalledWith(7);
+    expect(service.findAllForUser).toHaveBeenCalledWith(7, '2026-10-31');
   });
 
   it('updates a fixed expense scoped to the authenticated user', () => {
@@ -70,8 +70,8 @@ describe('FixedExpensesController', () => {
   it('pays a fixed expense scoped to the authenticated user', () => {
     const req = { user: { userId: 7 } };
 
-    controller.pay(req, 1);
+    controller.pay(req, 1, { today: '2026-10-31' });
 
-    expect(service.pay).toHaveBeenCalledWith(1, 7);
+    expect(service.pay).toHaveBeenCalledWith(1, 7, '2026-10-31');
   });
 });

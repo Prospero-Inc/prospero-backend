@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { JwtAuthGuard } from '../../auth/jwt-guard';
 import { FixedExpensesService } from '../services/fixed-expenses.service';
 import { CreateFixedExpenseDto } from '../dto/create-fixed-expense.dto';
 import { UpdateFixedExpenseDto } from '../dto/update-fixed-expense.dto';
+import { FixedExpensesTodayQueryDto } from '../dto/fixed-expenses-today-query.dto';
 
 @ApiTags('fixed-expenses')
 @ApiBearerAuth('JWT-auth')
@@ -32,8 +34,8 @@ export class FixedExpensesController {
   }
 
   @Get()
-  findAll(@Request() req) {
-    return this.fixedExpensesService.findAllForUser(req.user.userId);
+  findAll(@Request() req, @Query() { today }: FixedExpensesTodayQueryDto) {
+    return this.fixedExpensesService.findAllForUser(req.user.userId, today);
   }
 
   @Patch(':id')
@@ -55,7 +57,11 @@ export class FixedExpensesController {
   }
 
   @Post(':id/pay')
-  pay(@Request() req, @Param('id', ParseIntPipe) id: number) {
-    return this.fixedExpensesService.pay(id, req.user.userId);
+  pay(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Query() { today }: FixedExpensesTodayQueryDto,
+  ) {
+    return this.fixedExpensesService.pay(id, req.user.userId, today);
   }
 }
