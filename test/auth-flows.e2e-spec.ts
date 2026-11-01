@@ -179,6 +179,22 @@ describe('Auth flows (e2e, Postgres)', () => {
         .send({ refreshToken: second.refreshToken })
         .expect(401);
     });
+
+    it('signs every device out with logout-all', async () => {
+      const email = await createActiveUser('logout-all');
+      const { body: phone } = await login(email).expect(201);
+      const { body: laptop } = await login(email).expect(201);
+
+      await post('/api/auth/logout-all').expect(401);
+      await post('/api/auth/logout-all')
+        .set('Authorization', `Bearer ${phone.accessToken}`)
+        .expect(200, { revoked: 2 });
+
+      for (const session of [phone, laptop])
+        await post('/api/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(401);
+    });
   });
 
   describe('two-factor authentication', () => {
