@@ -180,6 +180,15 @@ export class AuthService {
     await this.refreshTokenRepository.revoke(tokenHash);
   }
 
+  /** "Cerrar sesión en todos los dispositivos": revokes every refresh token
+   * of the user, so no device can renew its session. Access tokens already
+   * issued stay valid until they expire (15 min); they are stateless. */
+  async logoutAll(userId: number): Promise<{ revoked: number }> {
+    const { count } =
+      await this.refreshTokenRepository.revokeAllForUser(userId);
+    return { revoked: count };
+  }
+
   private async buildAccessTokenResponse(
     user: User,
   ): Promise<AccessTokenResponse> {

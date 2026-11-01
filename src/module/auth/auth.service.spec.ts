@@ -662,4 +662,17 @@ describe('AuthService', () => {
       expect(refreshTokenRepository.revoke).not.toHaveBeenCalled();
     });
   });
+
+  describe('logoutAll', () => {
+    it('revokes every refresh token of the user', async () => {
+      refreshTokenRepository.revokeAllForUser.mockResolvedValue({ count: 3 });
+
+      await expect(service.logoutAll(activeUser.id)).resolves.toEqual({
+        revoked: 3,
+      });
+      expect(refreshTokenRepository.revokeAllForUser).toHaveBeenCalledWith(
+        activeUser.id,
+      );
+    });
+  });
 });

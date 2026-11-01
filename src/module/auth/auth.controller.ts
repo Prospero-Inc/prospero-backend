@@ -116,6 +116,20 @@ export class AuthController {
     return {};
   }
 
+  @Post('logout-all')
+  @HttpCode(200)
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary:
+      'Cerrar sesión en todos los dispositivos (revoca todos los refresh tokens)',
+  })
+  @ApiResponse({ status: 200, description: 'Sesiones revocadas.' })
+  @ApiResponse({ status: 401, description: 'Usuario no autorizado.' })
+  async logoutAll(@Request() req) {
+    return await this.authService.logoutAll(req.user.userId);
+  }
+
   @Get('enable-2fa')
   @ApiBearerAuth()
   @ApiBearerAuth('JWT-auth')
