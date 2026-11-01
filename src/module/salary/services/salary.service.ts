@@ -202,6 +202,15 @@ export class SalaryService {
     return this.salaryRepository.update(id, data);
   }
 
+  /** Deletes one of the user's incomes. The period it anchored (if it was a
+   * Payroll) is recomputed on the next read: periods are derived, not
+   * stored. A Gmail email it came from keeps its record (relation set to
+   * null), so the same email isn't imported again. */
+  async remove(id: number, userId: number) {
+    await this.findOwnedOrThrow(id, userId);
+    return this.salaryRepository.delete(id);
+  }
+
   distributeSalaryPreview(
     amount: number,
     strategy: SalaryDistributionStrategy,

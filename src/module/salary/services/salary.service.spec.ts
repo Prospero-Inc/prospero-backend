@@ -15,6 +15,7 @@ describe('SalaryService', () => {
     countByStatus: jest.Mock;
     findOneOwned: jest.Mock;
     update: jest.Mock;
+    delete: jest.Mock;
     getUserSalaryDetails: jest.Mock;
   };
 
@@ -27,6 +28,7 @@ describe('SalaryService', () => {
       countByStatus: jest.fn(),
       findOneOwned: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       getUserSalaryDetails: jest.fn(),
     };
 
@@ -57,6 +59,25 @@ describe('SalaryService', () => {
       date: new Date('2026-09-13'),
     });
     expect(result).toEqual({ message: 'Salario creado exitosamente' });
+  });
+
+  it('deletes a salary owned by the user', async () => {
+    repository.findOneOwned.mockResolvedValue({ id: 1, userId: 5 });
+    repository.delete.mockResolvedValue({ id: 1 });
+
+    await service.remove(1, 5);
+
+    expect(repository.findOneOwned).toHaveBeenCalledWith(1, 5);
+    expect(repository.delete).toHaveBeenCalledWith(1);
+  });
+
+  it('throws NotFoundException when deleting a salary not owned by the user', async () => {
+    repository.findOneOwned.mockResolvedValue(null);
+
+    await expect(service.remove(1, 5)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(repository.delete).not.toHaveBeenCalled();
   });
 
   it('throws NotFoundException when updating a salary not owned by the user', async () => {
