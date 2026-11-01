@@ -77,7 +77,7 @@ describe('GmailOAuthService', () => {
   });
 
   describe('buildAuthorizeUrl', () => {
-    it('includes client_id, redirect_uri, scope, access_type=offline, prompt=consent and a state carrying the userId', () => {
+    it('includes client_id, redirect_uri, scope, access_type=offline, prompt=select_account consent and a state carrying the userId', () => {
       const url = service.buildAuthorizeUrl(42);
       const parsed = new URL(url);
 
@@ -90,7 +90,7 @@ describe('GmailOAuthService', () => {
       );
       expect(parsed.searchParams.get('scope')).toBe(SCOPE);
       expect(parsed.searchParams.get('access_type')).toBe('offline');
-      expect(parsed.searchParams.get('prompt')).toBe('consent');
+      expect(parsed.searchParams.get('prompt')).toBe('select_account consent');
 
       const state = parsed.searchParams.get('state');
       const decoded = jwtService.decode(state) as { userId: number };

@@ -53,7 +53,10 @@ export class GmailOAuthService {
       response_type: 'code',
       scope: GMAIL_READONLY_SCOPE,
       access_type: 'offline',
-      prompt: 'consent',
+      // Always ask which Google account: the mailbox to read may not be the
+      // one the browser is signed in with. `consent` keeps Google returning
+      // a refresh token on every connection.
+      prompt: 'select_account consent',
       state,
     });
 
