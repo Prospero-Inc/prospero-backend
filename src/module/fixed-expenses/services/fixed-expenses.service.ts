@@ -15,7 +15,10 @@ import {
   resolvePeriodForDate,
   resolveTransactionPeriod,
 } from '../../periods/period.util';
-import { resolveOccurrenceDate } from '../occurrence.util';
+import {
+  resolveOccurrenceDate,
+  resolveReferenceDate,
+} from '../occurrence.util';
 
 @Injectable()
 export class FixedExpensesService {
@@ -72,12 +75,13 @@ export class FixedExpensesService {
     );
   }
 
-  async findAllForUser(userId: number) {
+  /** `localToday`: the user's date (YYYY-MM-DD), see resolveReferenceDate. */
+  async findAllForUser(userId: number, localToday?: string) {
     const [fixedExpenses, { periods, transactions }] = await Promise.all([
       this.fixedExpensesRepository.findManyByUser(userId),
       this.getPeriodContext(userId),
     ]);
-    const today = new Date();
+    const today = resolveReferenceDate(localToday, new Date());
 
     return fixedExpenses.map((fixedExpense) => {
       const occurrencePeriod = resolvePeriodForDate(
@@ -111,12 +115,12 @@ export class FixedExpensesService {
     return this.fixedExpensesRepository.delete(id);
   }
 
-  async pay(id: number, userId: number) {
+  async pay(id: number, userId: number, localToday?: string) {
     const fixedExpense = await this.findOwnedOrThrow(id, userId);
     const { periods, transactions } = await this.getPeriodContext(userId);
     const occurrenceDate = resolveOccurrenceDate(
       fixedExpense.dueDate,
-      new Date(),
+      resolveReferenceDate(localToday, new Date()),
     );
     const occurrencePeriod = resolvePeriodForDate(periods, occurrenceDate);
 

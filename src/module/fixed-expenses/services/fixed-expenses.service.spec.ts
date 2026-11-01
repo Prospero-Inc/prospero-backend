@@ -133,6 +133,38 @@ describe('FixedExpensesService', () => {
       expect(result.find((fe) => fe.id === 1)?.paidThisCycle).toBe(true);
       expect(result.find((fe) => fe.id === 2)?.paidThisCycle).toBe(false);
     });
+
+    it("keeps last month's bills paid on an evening that is already next month in UTC", async () => {
+      // Evening of Sep 30 in UTC-6 = Oct 1 in UTC. The Sep-9 occurrence was
+      // paid; with the server date it would look up October's instead.
+      jest.setSystemTime(new Date('2026-10-01T01:00:00.000Z'));
+      repository.findManyByUser.mockResolvedValue([
+        {
+          id: 1,
+          userId: 5,
+          amount: 15,
+          name: 'Apple Music',
+          budgetCategory: BudgetCategory.Deseo,
+          dueDate: d('2024-01-09'),
+          reminder: true,
+          description: null,
+        },
+      ]);
+      transactionsService.findAllForUser.mockResolvedValue([
+        {
+          id: 99,
+          userId: 5,
+          amount: 15,
+          date: d('2026-09-09'),
+          category: BudgetCategory.Deseo,
+          periodOverride: null,
+          fixedExpenseId: 1,
+        },
+      ]);
+
+      const [local] = await service.findAllForUser(5, '2026-09-30');
+      expect(local.paidThisCycle).toBe(true);
+    });
   });
 
   describe('pay', () => {
@@ -168,6 +200,19 @@ describe('FixedExpensesService', () => {
         description: 'Apple Music',
         fixedExpenseId: 1,
       });
+    });
+
+    it("dates the payment in the user's month, not the server's UTC one", async () => {
+      jest.setSystemTime(new Date('2026-10-01T01:00:00.000Z'));
+      repository.findOneOwned.mockResolvedValue(fixedExpense);
+      transactionsService.create.mockResolvedValue({ id: 100 });
+
+      await service.pay(1, 5, '2026-09-30');
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({ date: d('2026-09-09') }),
+      );
     });
 
     it('throws ConflictException and does not create a transaction when this cycle was already paid', async () => {
