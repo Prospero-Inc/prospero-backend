@@ -30,3 +30,28 @@ export function resolveOccurrenceDate(
     ),
   );
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * "Today" for resolving occurrences: the user's local date when the client
+ * sends it (YYYY-MM-DD), since the server's UTC date is already tomorrow on
+ * an American evening — which made October's paid bills show as unpaid
+ * (November's occurrence) and "Pagar" date the payment in November.
+ * Ignored unless it's a real date within a day of the server's UTC date
+ * (every time zone is), so a wrong client clock can't move the month.
+ */
+export function resolveReferenceDate(
+  localToday: string | undefined,
+  now: Date,
+): Date {
+  if (!localToday) return now;
+  const local = new Date(`${localToday}T00:00:00.000Z`);
+  if (
+    Number.isNaN(local.getTime()) ||
+    local.toISOString().slice(0, 10) !== localToday
+  )
+    return now;
+  const distance = Math.abs(local.getTime() - startOfUTCDay(now).getTime());
+  return distance <= DAY_MS ? local : now;
+}
