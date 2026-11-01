@@ -136,6 +136,10 @@ export class SalaryRepository {
     });
   }
 
+  delete(id: number) {
+    return this.prisma.salary.delete({ where: { id } });
+  }
+
   async getUserSalaryDetails(userId: number) {
     const now = new Date();
     const user = await this.prisma.user.findUnique({

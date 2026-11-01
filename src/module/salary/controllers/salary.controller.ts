@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Delete,
   Post,
   Query,
   Request,
@@ -83,6 +84,17 @@ export class SalaryController {
     @Body() updateSalaryDto: UpdateSalaryDto,
   ) {
     return this.salaryService.update(id, req.user.userId, updateSalaryDto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Eliminar un ingreso' })
+  @ApiResponse({ status: 200, description: 'Ingreso eliminado.' })
+  @ApiResponse({
+    status: 404,
+    description: 'El ingreso no existe o no es tuyo.',
+  })
+  removeSalary(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.salaryService.remove(id, req.user.userId);
   }
 
   @Get('distribute/preview')
