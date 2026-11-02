@@ -3,11 +3,10 @@ import { FixedExpensesController } from './controllers/fixed-expenses.controller
 import { FixedExpensesService } from './services/fixed-expenses.service';
 import { FixedExpensesRepository } from './repositories/fixed-expenses.repository';
 import { PrismaService } from '../prisma.service';
-import { SalaryModule } from '../salary/salary.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
-  imports: [SalaryModule, TransactionsModule],
+  imports: [TransactionsModule],
   controllers: [FixedExpensesController],
   providers: [FixedExpensesService, FixedExpensesRepository, PrismaService],
   exports: [FixedExpensesService],
