@@ -6,6 +6,18 @@ import {
   NotificationProvider,
 } from '../notifications.types';
 
+/** The email's link: an explicit `ctaUrl`, or `ctaPath` joined to the
+ * frontend's public URL with exactly one slash. Undefined (no button in
+ * `notification.hbs`) when neither can be built. */
+export const resolveCtaUrl = (
+  payload: Pick<NotificationPayload, 'ctaUrl' | 'ctaPath'>,
+  appBaseUrl: string | undefined = process.env.APP_BASE_URL,
+): string | undefined => {
+  if (payload.ctaUrl) return payload.ctaUrl;
+  if (!appBaseUrl || !payload.ctaPath) return undefined;
+  return `${appBaseUrl.replace(/\/+$/, '')}/${payload.ctaPath.replace(/^\/+/, '')}`;
+};
+
 /**
  * Translates a channel-agnostic `NotificationPayload` into an email via the
  * existing `MailModule` (same `@nestjs-modules/mailer` + `hbs` setup already
@@ -24,7 +36,7 @@ export class MailNotificationProvider implements NotificationProvider {
     await this.mailService.sendNotificationEmail(user, {
       subject: payload.subject,
       body: payload.body,
-      ctaUrl: payload.ctaUrl,
+      ctaUrl: resolveCtaUrl(payload),
       ctaLabel: payload.ctaLabel,
     });
   }

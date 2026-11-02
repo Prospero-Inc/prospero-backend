@@ -15,8 +15,8 @@ import {
 } from '../notifications.types';
 
 /** Frontend route where Gmail-detected movements pending review are listed
- * and confirmed (prospero-front `src/pages/expenditures.tsx`). */
-export const GMAIL_REVIEW_CTA_PATH = '/expenditures';
+ * and confirmed (prospero-front `src/pages/review.tsx`). */
+export const GMAIL_REVIEW_CTA_PATH = '/review';
 
 /**
  * Which `NotificationPreference` toggle gates each (type, channel) pair. A
