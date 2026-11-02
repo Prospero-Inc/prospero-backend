@@ -14,13 +14,14 @@ export interface NotificationPayload {
   readonly subject: string;
   readonly body: string;
   /** Optional absolute deep link into the frontend, e.g. the transactions
-   * list filtered to pending review. Used by the email channel. */
+   * list filtered to pending review. Used by the email channel; wins over
+   * `ctaPath` there. */
   readonly ctaUrl?: string;
   readonly ctaLabel?: string;
-  /** Optional frontend route relative to the app origin (e.g.
-   * `/expenditures`). Used by the push channel: the service worker resolves
-   * it against its own origin on `notificationclick`, so the backend never
-   * needs to know the frontend's public URL for push. */
+  /** Optional frontend route relative to the app origin (e.g. `/review`).
+   * The push channel sends it as is: the service worker resolves it against
+   * its own origin on `notificationclick`. The email channel joins it to
+   * `APP_BASE_URL` when no `ctaUrl` is given. */
   readonly ctaPath?: string;
   /** Freeform data worth keeping on the `NotificationLog` audit row for
    * later debugging/analytics (e.g. `{ pendingCount: 3 }`) — never used to
