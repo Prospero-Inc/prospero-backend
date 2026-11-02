@@ -1,19 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { BudgetCategory, IncomeType } from '@prisma/client';
+import { BudgetCategory } from '@prisma/client';
 import { FixedExpensesService } from './fixed-expenses.service';
 import { FixedExpensesRepository } from '../repositories/fixed-expenses.repository';
-import { SalaryService } from '../../salary/services/salary.service';
 import { TransactionsService } from '../../transactions/services/transactions.service';
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
-
-// Two payrolls in September split the month into: [..Aug31], [Sep1-14 open? no]
-// -> periods: index0 (..Aug31), index1 (Sep1-14), index2 (Sep15-open).
-const PAYROLLS = [
-  { type: IncomeType.Payroll, date: d('2026-09-01') },
-  { type: IncomeType.Payroll, date: d('2026-09-15') },
-];
 
 describe('FixedExpensesService', () => {
   let service: FixedExpensesService;
@@ -24,7 +16,6 @@ describe('FixedExpensesService', () => {
     update: jest.Mock;
     delete: jest.Mock;
   };
-  let salaryService: { findAllForUser: jest.Mock };
   let transactionsService: { findAllForUser: jest.Mock; create: jest.Mock };
 
   beforeEach(async () => {
@@ -35,7 +26,6 @@ describe('FixedExpensesService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
-    salaryService = { findAllForUser: jest.fn().mockResolvedValue(PAYROLLS) };
     transactionsService = {
       findAllForUser: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
@@ -45,7 +35,6 @@ describe('FixedExpensesService', () => {
       providers: [
         FixedExpensesService,
         { provide: FixedExpensesRepository, useValue: repository },
-        { provide: SalaryService, useValue: salaryService },
         { provide: TransactionsService, useValue: transactionsService },
       ],
     }).compile();
@@ -92,7 +81,7 @@ describe('FixedExpensesService', () => {
   });
 
   describe('findAllForUser', () => {
-    it('distinguishes paidThisCycle across fixed expenses that fall in different half-month periods', async () => {
+    it('distinguishes paidThisCycle across fixed expenses due on different days', async () => {
       const appleMusic = {
         id: 1,
         userId: 5,
@@ -165,6 +154,55 @@ describe('FixedExpensesService', () => {
       const [local] = await service.findAllForUser(5, '2026-09-30');
       expect(local.paidThisCycle).toBe(true);
     });
+
+    // The real case: with the last payroll on Oct 29, comparing payroll periods
+    // put the Oct 30 payment and the Nov 30 occurrence in the same open period.
+    describe('on Nov 2, with a bill due the 30th', () => {
+      const energia = {
+        id: 1,
+        userId: 5,
+        amount: 40,
+        name: 'Energía',
+        budgetCategory: BudgetCategory.Necesidad,
+        dueDate: d('2024-01-30'),
+        reminder: true,
+        description: null,
+      };
+      const payment = (date: string) => ({
+        id: 99,
+        userId: 5,
+        amount: 40,
+        date: d(date),
+        category: BudgetCategory.Necesidad,
+        periodOverride: null,
+        fixedExpenseId: 1,
+      });
+
+      beforeEach(() => {
+        jest.setSystemTime(d('2026-11-02'));
+        repository.findManyByUser.mockResolvedValue([energia]);
+      });
+
+      it("doesn't count October's payment for November's occurrence", async () => {
+        transactionsService.findAllForUser.mockResolvedValue([
+          payment('2026-10-30'),
+        ]);
+
+        const [result] = await service.findAllForUser(5);
+
+        expect(result.paidThisCycle).toBe(false);
+      });
+
+      it("counts a payment dated in November's occurrence month", async () => {
+        transactionsService.findAllForUser.mockResolvedValue([
+          payment('2026-11-30'),
+        ]);
+
+        const [result] = await service.findAllForUser(5);
+
+        expect(result.paidThisCycle).toBe(true);
+      });
+    });
   });
 
   describe('pay', () => {
@@ -230,6 +268,49 @@ describe('FixedExpensesService', () => {
 
       await expect(service.pay(1, 5)).rejects.toBeInstanceOf(ConflictException);
       expect(transactionsService.create).not.toHaveBeenCalled();
+    });
+
+    it("isn't blocked by last month's payment and dates the new one this month", async () => {
+      jest.setSystemTime(d('2026-11-02'));
+      repository.findOneOwned.mockResolvedValue({
+        ...fixedExpense,
+        dueDate: d('2024-01-30'),
+      });
+      transactionsService.findAllForUser.mockResolvedValue([
+        {
+          id: 99,
+          userId: 5,
+          amount: 15,
+          date: d('2026-10-30'),
+          category: BudgetCategory.Deseo,
+          periodOverride: null,
+          fixedExpenseId: 1,
+        },
+      ]);
+      transactionsService.create.mockResolvedValue({ id: 100 });
+
+      await service.pay(1, 5);
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({ date: d('2026-11-30'), fixedExpenseId: 1 }),
+      );
+    });
+
+    it('resolves a bill due the 31st to the last day of a 30-day month', async () => {
+      jest.setSystemTime(d('2026-11-02'));
+      repository.findOneOwned.mockResolvedValue({
+        ...fixedExpense,
+        dueDate: d('2024-01-31'),
+      });
+      transactionsService.create.mockResolvedValue({ id: 100 });
+
+      await service.pay(1, 5);
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({ date: d('2026-11-30') }),
+      );
     });
   });
 });
