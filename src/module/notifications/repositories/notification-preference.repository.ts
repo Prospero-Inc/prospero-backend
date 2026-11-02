@@ -7,7 +7,8 @@ import { PrismaService } from 'src/module/prisma.service';
 export type NotificationPreferenceToggle =
   | 'gmailReviewEmailEnabled'
   | 'gmailReviewPushEnabled'
-  | 'budgetAlertEmailEnabled';
+  | 'budgetAlertEmailEnabled'
+  | 'fixedExpenseReminderEnabled';
 
 /** Effective (fully resolved) toggles for a user. */
 export type NotificationPreferenceToggles = Pick<
@@ -33,6 +34,7 @@ const DEFAULT_PREFERENCE: NotificationPreferenceToggles = {
   gmailReviewEmailEnabled: true,
   gmailReviewPushEnabled: true,
   budgetAlertEmailEnabled: true,
+  fixedExpenseReminderEnabled: true,
 };
 
 @Injectable()

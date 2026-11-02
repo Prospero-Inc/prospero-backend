@@ -28,6 +28,7 @@ const PUSH_REQUEST_TIMEOUT_MS = 10_000;
 const PUSH_TAG_BY_TYPE: Record<NotificationType, string> = {
   [NotificationType.GmailReviewPending]: 'gmail-review',
   [NotificationType.BudgetThresholdAlert]: 'budget-alert',
+  [NotificationType.FixedExpenseReminder]: 'fixed-expense-reminder',
 };
 
 /** Push service answers meaning "this subscription no longer exists" —

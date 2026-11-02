@@ -29,4 +29,10 @@ export class NotificationLogRepository {
       },
     });
   }
+
+  findSentSince(userId: number, type: NotificationType, since: Date) {
+    return this.prisma.notificationLog.findMany({
+      where: { userId, type, sentAt: { gte: since } },
+    });
+  }
 }

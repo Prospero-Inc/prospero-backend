@@ -181,7 +181,11 @@ through its PostgREST API. Every migration that creates a table must also run
   and month (`ConflictException`/409 if so, to catch double-pay clicks), and otherwise creates
   one dated at the occurrence — not at "today". `GET /fixed-expenses` reuses the identical
   computation to annotate each item with `paidThisCycle: boolean`, so the frontend never
-  reimplements occurrence logic.
+  reimplements occurrence logic. `FixedExpenseReminderScheduler` (daily, 6:00 a. m.
+  `America/El_Salvador`, under the scheduler lock) sends one notification per user for the
+  fixed expenses with `reminder` whose occurrence is today and aren't paid; a user's failure
+  doesn't stop the rest, and `NotificationLog` keeps a second run from notifying twice. It only
+  reminds: nothing creates a `Transaction` on its own.
 - **user** — user CRUD/service backing auth (registration, profile, budget settings).
 - **mail** — `@nestjs-modules/mailer` + `hbs` templates (`module/mail/templates`) for
   activation and password-reset emails; the reset link points at the separate

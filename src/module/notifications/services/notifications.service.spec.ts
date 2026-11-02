@@ -12,7 +12,7 @@ import { NOTIFICATION_PROVIDERS } from '../notifications.types';
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let preferenceRepository: { findOrDefault: jest.Mock };
-  let logRepository: { create: jest.Mock };
+  let logRepository: { create: jest.Mock; findSentSince: jest.Mock };
   let userService: { findById: jest.Mock };
   let mailProvider: { channel: NotificationChannel; send: jest.Mock };
   let pushProvider: {
@@ -27,6 +27,7 @@ describe('NotificationsService', () => {
     gmailReviewEmailEnabled: true,
     gmailReviewPushEnabled: true,
     budgetAlertEmailEnabled: true,
+    fixedExpenseReminderEnabled: true,
   };
 
   const buildService = async (providers: unknown[]) => {
@@ -49,7 +50,10 @@ describe('NotificationsService', () => {
     preferenceRepository = {
       findOrDefault: jest.fn().mockResolvedValue({ ...allEnabled }),
     };
-    logRepository = { create: jest.fn().mockResolvedValue({ id: 1 }) };
+    logRepository = {
+      create: jest.fn().mockResolvedValue({ id: 1 }),
+      findSentSince: jest.fn().mockResolvedValue([]),
+    };
     userService = { findById: jest.fn().mockResolvedValue(user) };
     mailProvider = {
       channel: NotificationChannel.Email,
@@ -232,6 +236,100 @@ describe('NotificationsService', () => {
         service.notifyGmailReviewPending(5, 2),
       ).resolves.toBeUndefined();
       expect(pushProvider.send).toHaveBeenCalledTimes(1);
+      expect(mailProvider.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notifyFixedExpensesDue', () => {
+    const occurrence = new Date('2026-11-30T00:00:00.000Z');
+    const contabo = { id: 1, name: 'Contabo', amount: 15 };
+    const energia = { id: 2, name: 'Energía', amount: 40.5 };
+
+    it('names the bill and links to the fixed expenses screen', async () => {
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
+
+      expect(pushProvider.send).toHaveBeenCalledWith(
+        user,
+        expect.objectContaining({
+          type: NotificationType.FixedExpenseReminder,
+          subject: 'Contabo vence hoy',
+          body: expect.stringContaining('Contabo $15.00'),
+          ctaPath: '/fixed-expenses',
+        }),
+      );
+      expect(mailProvider.send).not.toHaveBeenCalled();
+    });
+
+    it('sends one notification for several bills due the same day', async () => {
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo, energia]);
+
+      expect(pushProvider.send).toHaveBeenCalledTimes(1);
+      expect(pushProvider.send).toHaveBeenCalledWith(
+        user,
+        expect.objectContaining({
+          subject: '2 gastos fijos vencen hoy',
+          body: expect.stringContaining('Contabo $15.00, Energía $40.50'),
+        }),
+      );
+    });
+
+    it('does not repeat what was already sent for this occurrence', async () => {
+      logRepository.findSentSince.mockResolvedValue([
+        { metadata: { occurrence: '2026-11-30', fixedExpenseIds: [1] } },
+      ]);
+
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
+
+      expect(pushProvider.send).not.toHaveBeenCalled();
+      expect(mailProvider.send).not.toHaveBeenCalled();
+    });
+
+    it('ignores what was sent for another occurrence', async () => {
+      logRepository.findSentSince.mockResolvedValue([
+        { metadata: { occurrence: '2026-10-30', fixedExpenseIds: [1] } },
+      ]);
+
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
+
+      expect(pushProvider.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('records what it sent, so a second run can skip it', async () => {
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
+
+      expect(logRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: NotificationType.FixedExpenseReminder,
+          metadata: { occurrence: '2026-11-30', fixedExpenseIds: [1] },
+        }),
+      );
+    });
+
+    it('sends nothing on any channel when reminders are off', async () => {
+      preferenceRepository.findOrDefault.mockResolvedValue({
+        ...allEnabled,
+        fixedExpenseReminderEnabled: false,
+      });
+
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
+
+      expect(pushProvider.send).not.toHaveBeenCalled();
+      expect(mailProvider.send).not.toHaveBeenCalled();
+    });
+
+    it('falls back to email only if the email fallback is on', async () => {
+      pushProvider.canDeliver.mockResolvedValue(false);
+
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
+      expect(mailProvider.send).toHaveBeenCalledTimes(1);
+
+      mailProvider.send.mockClear();
+      preferenceRepository.findOrDefault.mockResolvedValue({
+        ...allEnabled,
+        gmailReviewEmailEnabled: false,
+      });
+
+      await service.notifyFixedExpensesDue(5, occurrence, [contabo]);
       expect(mailProvider.send).not.toHaveBeenCalled();
     });
   });

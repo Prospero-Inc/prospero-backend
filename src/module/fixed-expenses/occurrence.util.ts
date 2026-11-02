@@ -55,3 +55,10 @@ export function resolveReferenceDate(
   const distance = Math.abs(local.getTime() - startOfUTCDay(now).getTime());
   return distance <= DAY_MS ? local : now;
 }
+
+/** The calendar date in `timeZone` at `now`, as UTC midnight like every
+ * occurrence date. For jobs, which have no client to send its local date. */
+export function resolveLocalDate(now: Date, timeZone: string): Date {
+  const local = new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
+  return new Date(`${local}T00:00:00.000Z`);
+}

@@ -23,6 +23,12 @@ export class FixedExpensesRepository {
     });
   }
 
+  findManyWithReminder() {
+    return this.prisma.fixedExpense.findMany({
+      where: { reminder: true },
+    });
+  }
+
   findOneOwned(id: number, userId: number) {
     return this.prisma.fixedExpense.findFirst({
       where: { id, userId },
