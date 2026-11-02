@@ -173,13 +173,15 @@ through its PostgREST API. Every migration that creates a table must also run
   `occurrence.util.ts`'s `resolveOccurrenceDate(dueDate, referenceDate)` is the key piece: a
   `FixedExpense.dueDate` only means "day of the month" (e.g. the 9th) — the function rebuilds
   that day-of-month in the month containing `referenceDate` (clamped to that month's length),
-  so a bill due the 9th and one due the 18th always resolve to the correct half-month period
-  regardless of which day the user actually clicks "pay" on. `pay()` uses this to find the
-  current cycle's occurrence date, checks whether a `Transaction` with that `fixedExpenseId`
-  already resolves to the same period (`ConflictException`/409 if so, to catch double-pay
-  clicks), and otherwise creates one dated at the occurrence — not at "today". `GET
-  /fixed-expenses` reuses the identical computation to annotate each item with
-  `paidThisCycle: boolean`, so the frontend never reimplements period/occurrence logic.
+  so a bill due the 9th and one due the 18th always land on their own date regardless of which
+  day the user actually clicks "pay" on. A fixed expense's cycle is the **calendar month of its
+  occurrence**, not a payroll period (the last period is open-ended, so future occurrences would
+  fall in it next to past payments). `pay()` uses this to find the current cycle's occurrence
+  date, checks whether a `Transaction` with that `fixedExpenseId` is dated in the same UTC year
+  and month (`ConflictException`/409 if so, to catch double-pay clicks), and otherwise creates
+  one dated at the occurrence — not at "today". `GET /fixed-expenses` reuses the identical
+  computation to annotate each item with `paidThisCycle: boolean`, so the frontend never
+  reimplements occurrence logic.
 - **user** — user CRUD/service backing auth (registration, profile, budget settings).
 - **mail** — `@nestjs-modules/mailer` + `hbs` templates (`module/mail/templates`) for
   activation and password-reset emails; the reset link points at the separate

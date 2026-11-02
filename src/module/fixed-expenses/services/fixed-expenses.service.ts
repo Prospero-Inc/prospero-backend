@@ -3,18 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { IncomeType, Transaction } from '@prisma/client';
+import { Transaction } from '@prisma/client';
 import { FixedExpensesRepository } from '../repositories/fixed-expenses.repository';
 import { CreateFixedExpenseDto } from '../dto/create-fixed-expense.dto';
 import { UpdateFixedExpenseDto } from '../dto/update-fixed-expense.dto';
-import { SalaryService } from '../../salary/services/salary.service';
 import { TransactionsService } from '../../transactions/services/transactions.service';
-import {
-  ComputedPeriod,
-  computePeriods,
-  resolvePeriodForDate,
-  resolveTransactionPeriod,
-} from '../../periods/period.util';
 import {
   resolveOccurrenceDate,
   resolveReferenceDate,
@@ -24,7 +17,6 @@ import {
 export class FixedExpensesService {
   constructor(
     private readonly fixedExpensesRepository: FixedExpensesRepository,
-    private readonly salaryService: SalaryService,
     private readonly transactionsService: TransactionsService,
   ) {}
 
@@ -45,55 +37,36 @@ export class FixedExpensesService {
     return fixedExpense;
   }
 
-  private async getPeriodContext(userId: number) {
-    const [salaries, transactions] = await Promise.all([
-      this.salaryService.findAllForUser(userId),
-      this.transactionsService.findAllForUser(userId),
-    ]);
-
-    const payrollDates = salaries
-      .filter((salary) => salary.type === IncomeType.Payroll)
-      .map((salary) => salary.date);
-
-    return { periods: computePeriods(payrollDates), transactions };
-  }
-
+  /** A fixed expense's cycle is the calendar month of its occurrence, not a
+   * payroll period: the last period is open-ended, so every future occurrence
+   * falls in it, next to the payments already made in it. */
   private findPaymentForOccurrence(
     transactions: Transaction[],
-    periods: ComputedPeriod[],
     fixedExpenseId: number,
-    occurrencePeriodIndex: number,
+    occurrenceDate: Date,
   ) {
     return transactions.find(
       (transaction) =>
         transaction.fixedExpenseId === fixedExpenseId &&
-        resolveTransactionPeriod(
-          periods,
-          transaction.date,
-          transaction.periodOverride,
-        ).index === occurrencePeriodIndex,
+        transaction.date.getUTCFullYear() === occurrenceDate.getUTCFullYear() &&
+        transaction.date.getUTCMonth() === occurrenceDate.getUTCMonth(),
     );
   }
 
   /** `localToday`: the user's date (YYYY-MM-DD), see resolveReferenceDate. */
   async findAllForUser(userId: number, localToday?: string) {
-    const [fixedExpenses, { periods, transactions }] = await Promise.all([
+    const [fixedExpenses, transactions] = await Promise.all([
       this.fixedExpensesRepository.findManyByUser(userId),
-      this.getPeriodContext(userId),
+      this.transactionsService.findAllForUser(userId),
     ]);
     const today = resolveReferenceDate(localToday, new Date());
 
     return fixedExpenses.map((fixedExpense) => {
-      const occurrencePeriod = resolvePeriodForDate(
-        periods,
-        resolveOccurrenceDate(fixedExpense.dueDate, today),
-      );
       const paidThisCycle = Boolean(
         this.findPaymentForOccurrence(
           transactions,
-          periods,
           fixedExpense.id,
-          occurrencePeriod.index,
+          resolveOccurrenceDate(fixedExpense.dueDate, today),
         ),
       );
 
@@ -117,18 +90,16 @@ export class FixedExpensesService {
 
   async pay(id: number, userId: number, localToday?: string) {
     const fixedExpense = await this.findOwnedOrThrow(id, userId);
-    const { periods, transactions } = await this.getPeriodContext(userId);
+    const transactions = await this.transactionsService.findAllForUser(userId);
     const occurrenceDate = resolveOccurrenceDate(
       fixedExpense.dueDate,
       resolveReferenceDate(localToday, new Date()),
     );
-    const occurrencePeriod = resolvePeriodForDate(periods, occurrenceDate);
 
     const existing = this.findPaymentForOccurrence(
       transactions,
-      periods,
       fixedExpense.id,
-      occurrencePeriod.index,
+      occurrenceDate,
     );
 
     if (existing) {
