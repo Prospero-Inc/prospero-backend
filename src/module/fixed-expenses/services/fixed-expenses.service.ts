@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Transaction } from '@prisma/client';
+import { FixedExpense, Transaction } from '@prisma/client';
 import { FixedExpensesRepository } from '../repositories/fixed-expenses.repository';
 import { CreateFixedExpenseDto } from '../dto/create-fixed-expense.dto';
 import { UpdateFixedExpenseDto } from '../dto/update-fixed-expense.dto';
@@ -72,6 +72,36 @@ export class FixedExpensesService {
 
       return { ...fixedExpense, paidThisCycle };
     });
+  }
+
+  /** Fixed expenses with a reminder whose occurrence is `today`, by user. */
+  async findRemindersDueOn(today: Date) {
+    const fixedExpenses =
+      await this.fixedExpensesRepository.findManyWithReminder();
+    const dueByUser = new Map<number, FixedExpense[]>();
+
+    for (const fixedExpense of fixedExpenses) {
+      const occurrence = resolveOccurrenceDate(fixedExpense.dueDate, today);
+      if (occurrence.getTime() !== today.getTime()) continue;
+      dueByUser.set(fixedExpense.userId, [
+        ...(dueByUser.get(fixedExpense.userId) ?? []),
+        fixedExpense,
+      ]);
+    }
+
+    return dueByUser;
+  }
+
+  /** Of a user's `fixedExpenses`, those not paid in `date`'s month. */
+  async filterUnpaid(
+    userId: number,
+    fixedExpenses: FixedExpense[],
+    date: Date,
+  ) {
+    const transactions = await this.transactionsService.findAllForUser(userId);
+    return fixedExpenses.filter(
+      ({ id }) => !this.findPaymentForOccurrence(transactions, id, date),
+    );
   }
 
   async update(

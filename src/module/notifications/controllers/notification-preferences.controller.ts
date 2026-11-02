@@ -40,6 +40,7 @@ export class NotificationPreferencesController {
       example: {
         gmailReviewEmailEnabled: true,
         gmailReviewPushEnabled: true,
+        fixedExpenseReminderEnabled: true,
         budgetAlertEmailEnabled: true,
       },
     },

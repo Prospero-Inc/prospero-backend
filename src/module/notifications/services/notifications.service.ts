@@ -18,22 +18,44 @@ import {
  * and confirmed (prospero-front `src/pages/review.tsx`). */
 export const GMAIL_REVIEW_CTA_PATH = '/review';
 
+/** Frontend route where fixed expenses are listed and marked as paid
+ * (prospero-front `src/pages/fixed-expenses.tsx`). */
+export const FIXED_EXPENSES_CTA_PATH = '/fixed-expenses';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** What a reminder needs to know about a fixed expense. */
+export interface DueFixedExpense {
+  id: number;
+  name: string;
+  amount: number;
+}
+
 /**
- * Which `NotificationPreference` toggle gates each (type, channel) pair. A
- * channel absent for a type is never used for it — e.g. budget alerts have
- * no push toggle yet, so they stay email-only until one is added here (plus
- * its column), with no other change to the dispatcher.
+ * Which `NotificationPreference` toggles gate each (type, channel) pair: all
+ * of them must be on. A channel absent for a type is never used for it — e.g.
+ * budget alerts have no push toggle yet, so they stay email-only until one is
+ * added here (plus its column), with no other change to the dispatcher.
+ * `gmailReviewEmailEnabled` is the switch the app shows as "email as a
+ * fallback", so reminders honor it too.
  */
 const CHANNEL_TOGGLES: Record<
   NotificationType,
-  Partial<Record<NotificationChannel, NotificationPreferenceToggle>>
+  Partial<Record<NotificationChannel, readonly NotificationPreferenceToggle[]>>
 > = {
   [NotificationType.GmailReviewPending]: {
-    [NotificationChannel.Push]: 'gmailReviewPushEnabled',
-    [NotificationChannel.Email]: 'gmailReviewEmailEnabled',
+    [NotificationChannel.Push]: ['gmailReviewPushEnabled'],
+    [NotificationChannel.Email]: ['gmailReviewEmailEnabled'],
   },
   [NotificationType.BudgetThresholdAlert]: {
-    [NotificationChannel.Email]: 'budgetAlertEmailEnabled',
+    [NotificationChannel.Email]: ['budgetAlertEmailEnabled'],
+  },
+  [NotificationType.FixedExpenseReminder]: {
+    [NotificationChannel.Push]: ['fixedExpenseReminderEnabled'],
+    [NotificationChannel.Email]: [
+      'fixedExpenseReminderEnabled',
+      'gmailReviewEmailEnabled',
+    ],
   },
 };
 
@@ -111,6 +133,59 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Fixed expenses due today and still unpaid, in one notification per user:
+   * push notifications of a type share a tag, so one per bill would replace
+   * each other. Skips what `NotificationLog` shows was already sent for this
+   * occurrence, so running twice on the same day doesn't notify twice.
+   */
+  async notifyFixedExpensesDue(
+    userId: number,
+    occurrenceDate: Date,
+    fixedExpenses: DueFixedExpense[],
+  ): Promise<void> {
+    const occurrence = occurrenceDate.toISOString().slice(0, 10);
+    const sent = await this.notificationLogRepository.findSentSince(
+      userId,
+      NotificationType.FixedExpenseReminder,
+      new Date(occurrenceDate.getTime() - DAY_MS),
+    );
+    const alreadyReminded = new Set(
+      sent.flatMap(({ metadata }) => {
+        const reminder = metadata as {
+          occurrence?: string;
+          fixedExpenseIds?: number[];
+        } | null;
+        return reminder?.occurrence === occurrence
+          ? reminder.fixedExpenseIds ?? []
+          : [];
+      }),
+    );
+    const pending = fixedExpenses.filter(({ id }) => !alreadyReminded.has(id));
+    if (pending.length === 0) {
+      return;
+    }
+
+    const detail = ({ name, amount }: DueFixedExpense) =>
+      `${name} $${amount.toFixed(2)}`;
+
+    await this.dispatch(userId, {
+      type: NotificationType.FixedExpenseReminder,
+      subject:
+        pending.length === 1
+          ? `${pending[0].name} vence hoy`
+          : `${pending.length} gastos fijos vencen hoy`,
+      body: `${pending.map(detail).join(', ')}. ${
+        pending.length === 1
+          ? 'Márcalo como pagado en Gastos fijos cuando lo pagues.'
+          : 'Márcalos como pagados en Gastos fijos cuando los pagues.'
+      }`,
+      ctaLabel: 'Ver gastos fijos',
+      ctaPath: FIXED_EXPENSES_CTA_PATH,
+      metadata: { occurrence, fixedExpenseIds: pending.map(({ id }) => id) },
+    });
+  }
+
   /** Never throws — see class doc comment. */
   private async dispatch(
     userId: number,
@@ -164,8 +239,8 @@ export class NotificationsService {
   ): NotificationChannel[] {
     const toggles = CHANNEL_TOGGLES[type];
     return CHANNEL_PRIORITY.filter((channel) => {
-      const toggle = toggles[channel];
-      return toggle !== undefined && preference[toggle] === true;
+      const required = toggles[channel];
+      return required?.every((toggle) => preference[toggle] === true) ?? false;
     });
   }
 

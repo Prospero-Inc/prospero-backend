@@ -1,4 +1,8 @@
-import { resolveOccurrenceDate, resolveReferenceDate } from './occurrence.util';
+import {
+  resolveLocalDate,
+  resolveOccurrenceDate,
+  resolveReferenceDate,
+} from './occurrence.util';
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
 
@@ -46,5 +50,17 @@ describe('resolveReferenceDate', () => {
 
   it('ignores impossible dates', () => {
     expect(resolveReferenceDate('2026-02-31', now)).toBe(now);
+  });
+});
+
+describe('resolveLocalDate', () => {
+  it('returns the date in the time zone, as UTC midnight', () => {
+    // 20:00 on Nov 29 in El Salvador (UTC-6) is already Nov 30 in UTC.
+    expect(
+      resolveLocalDate(
+        new Date('2026-11-30T02:00:00.000Z'),
+        'America/El_Salvador',
+      ),
+    ).toEqual(d('2026-11-29'));
   });
 });
