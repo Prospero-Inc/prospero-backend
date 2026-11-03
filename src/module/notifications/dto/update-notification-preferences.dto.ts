@@ -24,4 +24,12 @@ export class UpdateNotificationPreferencesDto {
   @IsBoolean()
   @IsOptional()
   budgetAlertEmailEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Avisos el día que vence un gasto fijo sin pagar, por push y por correo si el respaldo por correo está activo',
+  })
+  @IsBoolean()
+  @IsOptional()
+  fixedExpenseReminderEnabled?: boolean;
 }

@@ -304,19 +304,21 @@ enum NotificationChannel {
 enum NotificationType {
   GmailReviewPending
   BudgetThresholdAlert
+  FixedExpenseReminder
 }
 
 // Per-user opt-in/opt-out, one row per user (created lazily on first write;
 // absence means "all defaults enabled", see NotificationPreferenceRepository).
 model NotificationPreference {
-  id                      Int      @id @default(autoincrement())
-  userId                  Int      @unique @map("user_id")
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gmailReviewEmailEnabled Boolean  @default(true) @map("gmail_review_email_enabled")
-  budgetAlertEmailEnabled Boolean  @default(true) @map("budget_alert_email_enabled")
-  gmailReviewPushEnabled  Boolean  @default(true) @map("gmail_review_push_enabled")
-  createdAt               DateTime @default(now()) @map("created_at")
-  updatedAt               DateTime @updatedAt @map("updated_at")
+  id                          Int      @id @default(autoincrement())
+  userId                      Int      @unique @map("user_id")
+  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailReviewEmailEnabled     Boolean  @default(true) @map("gmail_review_email_enabled")
+  budgetAlertEmailEnabled     Boolean  @default(true) @map("budget_alert_email_enabled")
+  gmailReviewPushEnabled      Boolean  @default(true) @map("gmail_review_push_enabled")
+  fixedExpenseReminderEnabled Boolean  @default(true) @map("fixed_expense_reminder_enabled")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
 
   @@map("notification_preferences")
 }
