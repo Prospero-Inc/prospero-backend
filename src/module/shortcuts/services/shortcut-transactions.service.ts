@@ -178,6 +178,7 @@ export class ShortcutTransactionsService {
       date,
       description: merchant,
       institutionId: card.financialInstitutionId,
+      walletCardId: card.id,
     };
 
     if (resolution.kind === 'categorized') {

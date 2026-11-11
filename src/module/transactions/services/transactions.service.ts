@@ -11,6 +11,7 @@ import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import {
   DuplicateCandidateFilters,
+  LatestShortcutTransaction,
   TransactionFilters,
   TransactionsRepository,
 } from '../repositories/transactions.repository';
@@ -51,12 +52,16 @@ export interface CreateShortcutTransactionInput {
   reviewStatus: TransactionReviewStatus;
   suggestedCategory?: BudgetCategory | null;
   institutionId?: number | null;
+  /** Wallet card that paid it, so lists can show "iPhone · BAC Visa". */
+  walletCardId?: number | null;
 }
 
 // Same widening pattern as CreateTransactionInput: reviewStatus is never on
 // the public UpdateTransactionDto (no external client may set it directly),
 // only this service may transition it, from `update()` below.
-export interface UpdateTransactionInput extends UpdateTransactionDto {
+// `rememberMerchant` is a PATCH instruction, never a column.
+export interface UpdateTransactionInput
+  extends Omit<UpdateTransactionDto, 'rememberMerchant'> {
   reviewStatus?: TransactionReviewStatus;
 }
 
@@ -70,6 +75,8 @@ export interface TransactionWithPossibleDuplicate extends Transaction {
   fixedExpenseName: string | null;
   /** Bank the row was detected from, if any — list label. */
   institutionName: string | null;
+  /** Apple Wallet card that paid a Shortcuts row, if any — list label. */
+  walletCard: { id: number; name: string } | null;
   possibleGmailDuplicate: {
     id: number;
     senderEmail: string;
@@ -139,6 +146,17 @@ export class TransactionsService {
     return this.transactionsRepository.countConfirmedByCategory(userId);
   }
 
+  /** Last purchase received from iPhone Shortcuts (by `createdAt`), for
+   * the "Funcionando" state of the Shortcuts settings screen. */
+  findLatestShortcutTransaction(
+    userId: number,
+  ): Promise<LatestShortcutTransaction | null> {
+    return this.transactionsRepository.findLatestBySource(
+      userId,
+      MovementSource.Shortcut,
+    );
+  }
+
   findAllForUser(userId: number, filters: TransactionFilters = {}) {
     return this.transactionsRepository.findManyByUser(userId, filters);
   }
@@ -188,10 +206,11 @@ export class TransactionsService {
     }
 
     return transactions.map(
-      ({ fixedExpense, institution, ...transaction }) => ({
+      ({ fixedExpense, institution, walletCard, ...transaction }) => ({
         ...transaction,
         fixedExpenseName: fixedExpense?.name ?? null,
         institutionName: institution?.name ?? null,
+        walletCard: walletCard ?? null,
         possibleGmailDuplicate:
           duplicateByTransactionId.get(transaction.id) ?? null,
       }),
@@ -226,7 +245,10 @@ export class TransactionsService {
   ) {
     const existing = await this.findOwnedOrThrow(id, userId);
 
-    const data: UpdateTransactionInput = { ...updateTransactionDto };
+    // rememberMerchant defaults to true ("Recordar para este comercio" is
+    // checked by default in the review queue) and is never persisted.
+    const { rememberMerchant = true, ...changes } = updateTransactionDto;
+    const data: UpdateTransactionInput = { ...changes };
 
     // Gap closed: a Gmail-detected transaction is created with no category
     // (reviewStatus Detected/PendingReview). The moment the user assigns one
@@ -242,7 +264,7 @@ export class TransactionsService {
     const updated = await this.transactionsRepository.update(id, data);
 
     const category = updateTransactionDto.category;
-    if (category) {
+    if (category && rememberMerchant) {
       await this.learnMerchantRule(
         userId,
         existing,

@@ -19,8 +19,13 @@ const isUniqueViolation = (error: unknown): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
   error.code === UNIQUE_CONSTRAINT_VIOLATION;
 
-/** `GET /wallet-cards` item: the row plus its bank's name for the list. */
-export type WalletCardView = WalletCard & { institutionName: string | null };
+/** `/wallet-cards` item: the row plus its bank's name and `isNew` (an
+ * auto-registered card the user hasn't chosen a category option for yet,
+ * shown as "Nueva"). */
+export type WalletCardView = WalletCard & {
+  institutionName: string | null;
+  isNew: boolean;
+};
 
 const toView = ({
   financialInstitution,
@@ -28,6 +33,7 @@ const toView = ({
 }: WalletCardWithInstitution): WalletCardView => ({
   ...card,
   institutionName: financialInstitution?.name ?? null,
+  isNew: card.configuredAt === null,
 });
 
 /**
@@ -51,7 +57,13 @@ export class WalletCardsService {
   ): Promise<WalletCardView> {
     await this.assertInstitutionOwned(userId, dto.financialInstitutionId);
     try {
-      return toView(await this.repository.create(userId, dto));
+      // Created by hand: the user already saw the category options.
+      return toView(
+        await this.repository.create(userId, {
+          ...dto,
+          configuredAt: new Date(),
+        }),
+      );
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException('A card with that name already exists');
@@ -67,7 +79,12 @@ export class WalletCardsService {
   ): Promise<WalletCardView> {
     await this.findOwnedOrThrow(id, userId);
     await this.assertInstitutionOwned(userId, dto.financialInstitutionId);
-    const data: WalletCardData = dto;
+    // Any PATCH carrying defaultCategory, null ("Según el comercio")
+    // included, is the user choosing an option: the card stops being new.
+    const data: WalletCardData = {
+      ...dto,
+      ...(dto.defaultCategory !== undefined && { configuredAt: new Date() }),
+    };
     try {
       return toView(await this.repository.update(id, data));
     } catch (error) {
@@ -93,6 +110,7 @@ export class WalletCardsService {
     userId: number,
     rawName: string,
   ): Promise<WalletCard> {
+    // Auto-registered cards keep configuredAt null → isNew.
     const name = rawName.trim();
     const existing = await this.repository.findByName(userId, name);
     if (existing) return existing;

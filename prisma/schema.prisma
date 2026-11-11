@@ -78,12 +78,16 @@ model Transaction {
   institutionId     Int?                    @map("institution_id")
   institution       FinancialInstitution?   @relation(fields: [institutionId], references: [id], onDelete: SetNull)
   gmailMessageId    String?                 @map("gmail_message_id")
+  /// Apple Wallet card a Shortcuts purchase was paid with (null otherwise).
+  walletCardId      Int?                    @map("wallet_card_id")
+  walletCard        WalletCard?             @relation(fields: [walletCardId], references: [id], onDelete: SetNull)
   processedEmails   ProcessedEmail[]
   createdAt         DateTime                @default(now()) @map("created_at")
   updatedAt         DateTime                @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
   @@index([userId, date], name: "transaction_user_date_idx")
+  @@index([walletCardId])
   @@map("transactions")
 }
 
@@ -416,6 +420,10 @@ model WalletCard {
   defaultCategory        BudgetCategory?       @map("default_category")
   financialInstitutionId Int?                  @map("financial_institution_id")
   financialInstitution   FinancialInstitution? @relation(fields: [financialInstitutionId], references: [id], onDelete: SetNull)
+  /// When the user first chose a category option for the card (null = an
+  /// auto-registered card still marked "Nueva" in the app).
+  configuredAt           DateTime?             @map("configured_at")
+  transactions           Transaction[]
   createdAt              DateTime              @default(now()) @map("created_at")
   updatedAt              DateTime              @updatedAt @map("updated_at")
 
