@@ -60,8 +60,8 @@ describe('ShortcutTokenThrottleGuard', () => {
 
   it('lets requests without a Shortcuts token through to the auth guard', async () => {
     await expect(guard.canActivate(contextFor())).resolves.toBe(true);
-    await expect(
-      guard.canActivate(contextFor('Bearer eyJ.a.b')),
-    ).resolves.toBe(true);
+    await expect(guard.canActivate(contextFor('Bearer eyJ.a.b'))).resolves.toBe(
+      true,
+    );
   });
 });

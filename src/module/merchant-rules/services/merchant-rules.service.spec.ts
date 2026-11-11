@@ -10,7 +10,11 @@ describe('MerchantRulesService', () => {
   it('upserts under the normalized key', async () => {
     repository.upsert.mockResolvedValue({ id: 1 });
 
-    await service.upsert(5, ' Súper Selectos Suc. 4 ', BudgetCategory.Necesidad);
+    await service.upsert(
+      5,
+      ' Súper Selectos Suc. 4 ',
+      BudgetCategory.Necesidad,
+    );
 
     expect(repository.upsert).toHaveBeenCalledWith(
       5,

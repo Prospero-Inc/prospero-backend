@@ -45,7 +45,11 @@ describe('ShortcutTokenGuard', () => {
       'Bearer prs_abc',
       { ...activeToken, revokedAt: new Date() },
     ],
-    ['a token without the scope', 'Bearer prs_abc', { ...activeToken, scope: 'other' }],
+    [
+      'a token without the scope',
+      'Bearer prs_abc',
+      { ...activeToken, scope: 'other' },
+    ],
   ])('401 for %s', async (_label, authorization, found) => {
     tokens.findByRawToken.mockResolvedValue(found);
 

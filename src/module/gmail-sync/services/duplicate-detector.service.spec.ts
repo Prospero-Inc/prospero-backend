@@ -146,7 +146,10 @@ describe('DuplicateDetectorService', () => {
     it('matches ±1 cent and ±1 calendar day, closest first', async () => {
       const far = shortcut(9.98, '2026-11-09T08:00:00.000Z', 30);
       const near = shortcut(10.0, '2026-11-11T01:00:00.000Z', 31);
-      transactionsService.findDuplicateCandidates.mockResolvedValue([far, near]);
+      transactionsService.findDuplicateCandidates.mockResolvedValue([
+        far,
+        near,
+      ]);
 
       const result = await service.findShortcutDuplicate(
         5,

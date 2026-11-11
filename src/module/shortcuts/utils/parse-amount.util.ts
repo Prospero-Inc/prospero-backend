@@ -40,9 +40,7 @@ export function parseShortcutAmount(input: unknown): number | null {
 }
 
 function parseAmountString(raw: string): number | null {
-  const cleaned = raw
-    .replace(/US\$|USD|\$/gi, '')
-    .replace(/[\s  ]/g, '');
+  const cleaned = raw.replace(/US\$|USD|\$/gi, '').replace(/[\s  ]/g, '');
   if (!/^[\d.,]+$/.test(cleaned) || !/\d/.test(cleaned)) return null;
 
   const lastComma = cleaned.lastIndexOf(',');

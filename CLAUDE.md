@@ -186,6 +186,40 @@ through its PostgREST API. Every migration that creates a table must also run
   fixed expenses with `reminder` whose occurrence is today and aren't paid; a user's failure
   doesn't stop the rest, and `NotificationLog` keeps a second run from notifying twice. It only
   reminds: nothing creates a `Transaction` on its own.
+- **merchant-rules** (`src/module/merchant-rules/`) — learned per-user `MerchantRule`
+  (`merchantKey` → `BudgetCategory`). `normalizeMerchantKey` (lowercase, no accents, no branch
+  numbers like `#123`/`suc 4`/digits, punctuation → space, collapsed spaces; empty key is never
+  stored). No domain dependencies. Learning happens only in `TransactionsService.update`: a PATCH
+  that sets `category` on a row with a `description` upserts the rule (any source: confirming in
+  the review queue, editing). Creating a manual expense never learns (co-founder decision), and
+  Gmail rows from Banco Agrícola (`NON_LEARNABLE_PARSER_KEYS`, its description is a field blob)
+  are skipped; BAC's description is the merchant, so it learns. Best effort: a failure is logged,
+  never fails the PATCH.
+- **wallet-cards** (`src/module/wallet-cards/`) — `WalletCard` = an Apple Wallet card by the exact
+  name iPhone Shortcuts sends (`@@unique([userId, name])`), with `defaultCategory` (null = by
+  merchant) and an optional own `financialInstitutionId`. JWT CRUD at `/wallet-cards`
+  (409 on duplicated name, 404 on another user's card/institution). `findOrCreateByName`
+  auto-registers unknown cards with `defaultCategory: null`.
+- **shortcuts** (`src/module/shortcuts/`) — the iPhone Shortcuts "Transaction" automation
+  (Apple Pay). `ShortcutToken`s (`prs_` + base64url of 32 random bytes; only the SHA-256 hex is
+  stored, shown once) are managed with the normal JWT at `POST/GET /shortcuts/tokens` and
+  `POST /shortcuts/tokens/:id/revoke`. `POST /shortcuts/transactions` is **not** behind
+  `JwtAuthGuard`: `ShortcutTokenGuard` accepts only an unrevoked `prs_` token with the
+  `shortcut:transactions` scope (a JWT gets 401 there, and a `prs_` token gets 401 everywhere
+  else). `ShortcutTokenThrottleGuard` limits 30 req/min per token on the throttler storage (same
+  approach as `LoginEmailThrottleGuard`, not a `ThrottlerGuard` subclass, so the global 60/min/IP
+  stays untouched and still bounds made-up tokens). The service parses the amount leniently
+  (`parse-amount.util.ts` documents the comma/dot rule), stores the date as El Salvador wall clock
+  in UTC fields (same convention as the Gmail parsers), auto-registers the card, skips duplicates
+  (Shortcut double fire < 2 min; Manual same amount same day; Gmail ±1 cent ±1 day, confirming
+  the Gmail row with the resolved category if it is still in review), then classifies by
+  MerchantRule > card default; otherwise creates it `category: null`, `PendingReview` (same
+  review queue as Gmail) with `Transaction.suggestedCategory`. Responses are `{ message, status,
+  transactionId }` with a Spanish `message` (`src/i18n/*/shortcut.json`, always `lang: 'es'`).
+  `MovementSource` now has `Shortcut`. In the other direction, gmail-sync's `handleExpense`
+  checks `DuplicateDetectorService.findShortcutDuplicate` (±1 cent, ±1 day) first and records
+  the email as `PossibleDuplicate` with `resolvedAt` already set (silent, no badge, not counted
+  for the notification).
 - **user** — user CRUD/service backing auth (registration, profile, budget settings).
 - **mail** — `@nestjs-modules/mailer` + `hbs` templates (`module/mail/templates`) for
   activation and password-reset emails; the reset link points at the separate
