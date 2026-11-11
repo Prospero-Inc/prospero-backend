@@ -193,17 +193,27 @@ through its PostgREST API. Every migration that creates a table must also run
   that sets `category` on a row with a `description` upserts the rule (any source: confirming in
   the review queue, editing). Creating a manual expense never learns (co-founder decision), and
   Gmail rows from Banco Agrícola (`NON_LEARNABLE_PARSER_KEYS`, its description is a field blob)
-  are skipped; BAC's description is the merchant, so it learns. Best effort: a failure is logged,
-  never fails the PATCH.
+  are skipped; BAC's description is the merchant, so it learns. The PATCH body may carry
+  `rememberMerchant: false` ("Recordar para este comercio" unchecked; default true, never
+  persisted, raw booleans only since the global pipe's implicit conversion would turn any string
+  into `true`) to confirm without learning. Best effort: a failure is logged, never fails the
+  PATCH.
 - **wallet-cards** (`src/module/wallet-cards/`) — `WalletCard` = an Apple Wallet card by the exact
   name iPhone Shortcuts sends (`@@unique([userId, name])`), with `defaultCategory` (null = by
   merchant) and an optional own `financialInstitutionId`. JWT CRUD at `/wallet-cards`
   (409 on duplicated name, 404 on another user's card/institution). `findOrCreateByName`
-  auto-registers unknown cards with `defaultCategory: null`.
+  auto-registers unknown cards with `defaultCategory: null` and `configuredAt: null`; responses
+  expose `isNew` (= `configuredAt == null`, the "Nueva" tag). `configuredAt` is set by a manual
+  `POST` and by any `PATCH` that includes `defaultCategory` (null = "Según el comercio" counts).
+  `Transaction.walletCardId` (SetNull) records which card paid a Shortcuts purchase; every
+  transaction response (`GET /transactions`, PATCH, POST, DELETE) carries
+  `walletCard: { id, name } | null`.
 - **shortcuts** (`src/module/shortcuts/`) — the iPhone Shortcuts "Transaction" automation
   (Apple Pay). `ShortcutToken`s (`prs_` + base64url of 32 random bytes; only the SHA-256 hex is
   stored, shown once) are managed with the normal JWT at `POST/GET /shortcuts/tokens` and
-  `POST /shortcuts/tokens/:id/revoke`. `POST /shortcuts/transactions` is **not** behind
+  `POST /shortcuts/tokens/:id/revoke`; `GET /shortcuts/status` (JWT) returns
+  `{ lastTransaction: { id, description, amount, date, createdAt } | null }`, the latest
+  `source: Shortcut` row by `createdAt` (the "Funcionando" state). `POST /shortcuts/transactions` is **not** behind
   `JwtAuthGuard`: `ShortcutTokenGuard` accepts only an unrevoked `prs_` token with the
   `shortcut:transactions` scope (a JWT gets 401 there, and a `prs_` token gets 401 everywhere
   else). `ShortcutTokenThrottleGuard` limits 30 req/min per token on the throttler storage (same
