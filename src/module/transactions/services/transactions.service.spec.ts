@@ -16,6 +16,7 @@ describe('TransactionsService', () => {
     findOneOwned: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
+    findLatestBySource: jest.Mock;
   };
 
   let merchantRules: { upsert: jest.Mock; find: jest.Mock };
@@ -34,6 +35,7 @@ describe('TransactionsService', () => {
       findOneOwned: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      findLatestBySource: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -148,6 +150,7 @@ describe('TransactionsService', () => {
         ...manualTransaction,
         fixedExpenseName: null,
         institutionName: null,
+        walletCard: null,
         possibleGmailDuplicate: {
           senderEmail: 'alertas@bancoagricola.com',
           processedAt: new Date('2026-10-07T17:23:44.000Z'),
@@ -173,6 +176,7 @@ describe('TransactionsService', () => {
         ...gmailTransaction,
         fixedExpenseName: null,
         institutionName: null,
+        walletCard: null,
         possibleGmailDuplicate: null,
       },
     ]);
@@ -201,6 +205,7 @@ describe('TransactionsService', () => {
         amount: 30,
         fixedExpenseName: 'Internet',
         institutionName: 'Banco Agrícola',
+        walletCard: null,
         possibleGmailDuplicate: null,
       },
     ]);
@@ -223,6 +228,7 @@ describe('TransactionsService', () => {
         ...manualTransaction,
         fixedExpenseName: null,
         institutionName: null,
+        walletCard: null,
         possibleGmailDuplicate: null,
       },
     ]);
@@ -370,6 +376,82 @@ describe('TransactionsService', () => {
       await expect(
         service.update(6, 5, { category: 'Deseo' } as any),
       ).resolves.toEqual({ id: 6 });
+    });
+  });
+  describe('wallet card label and Shortcuts extras', () => {
+    it('exposes the Wallet card of a Shortcut row as { id, name }', async () => {
+      repository.findManyByUserWithLabels.mockResolvedValue([
+        {
+          id: 20,
+          userId: 5,
+          source: MovementSource.Shortcut,
+          walletCard: { id: 3, name: 'BAC Visa' },
+        },
+      ]);
+
+      const [row] = await service.findAllForUserWithPossibleDuplicates(5);
+
+      expect(row.walletCard).toEqual({ id: 3, name: 'BAC Visa' });
+    });
+
+    it('rememberMerchant: false skips learning and is never persisted', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 7,
+        userId: 5,
+        source: MovementSource.Shortcut,
+        description: 'La Neveria',
+        reviewStatus: TransactionReviewStatus.PendingReview,
+        institution: null,
+      });
+      repository.update.mockResolvedValue({ id: 7 });
+
+      await service.update(7, 5, {
+        category: 'Deseo',
+        rememberMerchant: false,
+      } as any);
+
+      expect(repository.update).toHaveBeenCalledWith(7, {
+        category: 'Deseo',
+        reviewStatus: TransactionReviewStatus.Confirmed,
+      });
+      expect(merchantRules.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rememberMerchant: true learns and is stripped from the update', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 8,
+        userId: 5,
+        source: MovementSource.Shortcut,
+        description: 'La Neveria',
+        reviewStatus: TransactionReviewStatus.Confirmed,
+        institution: null,
+      });
+      repository.update.mockResolvedValue({ id: 8 });
+
+      await service.update(8, 5, {
+        category: 'Deseo',
+        rememberMerchant: true,
+      } as any);
+
+      expect(repository.update).toHaveBeenCalledWith(8, { category: 'Deseo' });
+      expect(merchantRules.upsert).toHaveBeenCalledWith(
+        5,
+        'La Neveria',
+        'Deseo',
+      );
+    });
+
+    it('findLatestShortcutTransaction asks for the latest Shortcut row', async () => {
+      const latest = { id: 1, description: 'Puma', amount: 25 };
+      repository.findLatestBySource.mockResolvedValue(latest);
+
+      await expect(service.findLatestShortcutTransaction(5)).resolves.toBe(
+        latest,
+      );
+      expect(repository.findLatestBySource).toHaveBeenCalledWith(
+        5,
+        MovementSource.Shortcut,
+      );
     });
   });
 });

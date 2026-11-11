@@ -23,6 +23,20 @@ export interface DuplicateCandidateFilters {
   createdAfter?: Date;
 }
 
+/** Card label every transaction response carries (`walletCard`). */
+export const WALLET_CARD_LABEL = {
+  walletCard: { select: { id: true, name: true } },
+} as const;
+
+/** Most recent `source: Shortcut` row, for GET /shortcuts/status. */
+export interface LatestShortcutTransaction {
+  id: number;
+  description: string | null;
+  amount: number;
+  date: Date;
+  createdAt: Date;
+}
+
 export interface TransactionFilters {
   from?: Date;
   to?: Date;
@@ -48,6 +62,7 @@ export class TransactionsRepository {
         ...data,
         userId,
       },
+      include: WALLET_CARD_LABEL,
     });
   }
 
@@ -77,6 +92,7 @@ export class TransactionsRepository {
         suggestedCategory: data.suggestedCategory,
         reviewStatus: data.reviewStatus,
         institutionId: data.institutionId,
+        walletCardId: data.walletCardId,
         source: MovementSource.Shortcut,
       },
     });
@@ -160,6 +176,7 @@ export class TransactionsRepository {
       include: {
         fixedExpense: { select: { name: true } },
         institution: { select: { name: true } },
+        ...WALLET_CARD_LABEL,
       },
       orderBy: { date: 'desc' },
     });
@@ -237,12 +254,31 @@ export class TransactionsRepository {
     return this.prisma.transaction.update({
       where: { id },
       data,
+      include: WALLET_CARD_LABEL,
     });
   }
 
   delete(id: number) {
     return this.prisma.transaction.delete({
       where: { id },
+      include: WALLET_CARD_LABEL,
+    });
+  }
+
+  findLatestBySource(
+    userId: number,
+    source: MovementSource,
+  ): Promise<LatestShortcutTransaction | null> {
+    return this.prisma.transaction.findFirst({
+      where: { userId, source },
+      select: {
+        id: true,
+        description: true,
+        amount: true,
+        date: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }
