@@ -264,7 +264,9 @@ export class TransactionsService {
    */
   private async learnMerchantRule(
     userId: number,
-    existing: Transaction & { institution?: { parserKey: string | null } | null },
+    existing: Transaction & {
+      institution?: { parserKey: string | null } | null;
+    },
     category: BudgetCategory,
     description: string | null,
   ): Promise<void> {

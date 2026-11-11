@@ -318,7 +318,11 @@ describe('TransactionsService', () => {
         description: 'Pricesmart',
       } as any);
 
-      expect(merchantRules.upsert).toHaveBeenCalledWith(5, 'Pricesmart', 'Ahorro');
+      expect(merchantRules.upsert).toHaveBeenCalledWith(
+        5,
+        'Pricesmart',
+        'Ahorro',
+      );
     });
 
     it('does not learn when the PATCH has no category or the row has no description', async () => {

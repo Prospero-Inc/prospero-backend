@@ -108,7 +108,9 @@ export class TransactionsRepository {
   findRecentClassifiedWithDescription(
     userId: number,
     take: number,
-  ): Promise<{ description: string | null; category: BudgetCategory | null }[]> {
+  ): Promise<
+    { description: string | null; category: BudgetCategory | null }[]
+  > {
     return this.prisma.transaction.findMany({
       where: {
         userId,
