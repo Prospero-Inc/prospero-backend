@@ -261,9 +261,8 @@ export class ShortcutTransactionsService {
       if (byMerchant) return byMerchant;
     }
 
-    const totals = await this.transactionsService.countConfirmedByCategory(
-      userId,
-    );
+    const totals =
+      await this.transactionsService.countConfirmedByCategory(userId);
     const overall = mode(
       new Map(totals.map(({ category, count }) => [category, count])),
     );

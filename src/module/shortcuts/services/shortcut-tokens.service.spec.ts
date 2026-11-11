@@ -31,7 +31,12 @@ describe('ShortcutTokensService', () => {
     expect(name).toBe('iPhone');
     expect(hash).toBe(createHash('sha256').update(result.token).digest('hex'));
     expect(hash).not.toContain(result.token);
-    expect(result).toEqual({ id: 1, name: 'iPhone', token: result.token, createdAt });
+    expect(result).toEqual({
+      id: 1,
+      name: 'iPhone',
+      token: result.token,
+      createdAt,
+    });
   });
 
   it('lists tokens without hash or token', async () => {

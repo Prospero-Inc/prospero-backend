@@ -38,6 +38,21 @@ export type I18nTranslations = {
         "errorVerifyingToken": string;
         "twoFactorAlreadyEnabled": string;
     };
+    "shortcut": {
+        "saved": string;
+        "pendingReview": string;
+        "alreadyRegistered": string;
+        "alreadyRegisteredWithCategory": string;
+        "invalidAmount": string;
+        "invalidDate": string;
+        "invalidToken": string;
+        "tooManyRequests": string;
+        "category": {
+            "Necesidad": string;
+            "Deseo": string;
+            "Ahorro": string;
+        };
+    };
     "validation": {
         "NOT_EMPTY": string;
         "INVALID_EMAIL": string;
