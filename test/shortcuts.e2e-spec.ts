@@ -197,6 +197,10 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
     it('sends an unclassified purchase to review, auto-registers the card and learns on confirm', async () => {
       const { userId, accessToken, token, tokenId } = await createUser('flow');
 
+      await asUser(accessToken)
+        .get('/api/shortcuts/status')
+        .expect(200, { lastTransaction: null });
+
       const first = await shortcut(token, {
         amount: '$12.50',
         merchant: ' Puma ',
@@ -213,6 +217,13 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
         where: { userId_name: { userId, name: 'BAC Visa' } },
       });
       expect(card.defaultCategory).toBeNull();
+      expect(card.configuredAt).toBeNull();
+      const { body: cardList } = await asUser(accessToken)
+        .get('/api/wallet-cards')
+        .expect(200);
+      expect(cardList).toEqual([
+        expect.objectContaining({ id: card.id, name: 'BAC Visa', isNew: true }),
+      ]);
       const token1 = await prisma.shortcutToken.findUniqueOrThrow({
         where: { id: tokenId },
       });
@@ -233,28 +244,49 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
           suggestedCategory: BudgetCategory.Necesidad,
           source: 'Shortcut',
           reviewStatus: 'PendingReview',
+          walletCardId: card.id,
+          walletCard: { id: card.id, name: 'BAC Visa' },
         }),
       ]);
+      const { body: status } = await asUser(accessToken)
+        .get('/api/shortcuts/status')
+        .expect(200);
+      expect(status).toEqual({
+        lastTransaction: {
+          id: first.body.transactionId,
+          description: 'Puma',
+          amount: 12.5,
+          date: '2026-11-02T21:30:00.000Z',
+          createdAt: expect.any(String),
+        },
+      });
       const summary = await asUser(accessToken)
         .get('/api/review-queue/summary')
         .expect(200);
       expect(summary.body.pendingTransactions).toBe(1);
 
       // Confirming in the queue (PATCH with category) learns "puma".
-      await asUser(accessToken)
+      const { body: patched } = await asUser(accessToken)
         .patch(`/api/transactions/${first.body.transactionId}`)
         .send({ category: 'Deseo' })
         .expect(200);
+      expect(patched.walletCard).toEqual({ id: card.id, name: 'BAC Visa' });
+      expect(patched).not.toHaveProperty('rememberMerchant');
       const rule = await prisma.merchantRule.findUniqueOrThrow({
         where: { userId_merchantKey: { userId, merchantKey: 'puma' } },
       });
       expect(rule.category).toBe(BudgetCategory.Deseo);
 
       // The merchant rule now classifies directly, over the card default.
-      await asUser(accessToken)
+      const { body: configured } = await asUser(accessToken)
         .patch(`/api/wallet-cards/${card.id}`)
         .send({ defaultCategory: 'Ahorro' })
         .expect(200);
+      expect(configured).toMatchObject({
+        defaultCategory: 'Ahorro',
+        configuredAt: expect.any(String),
+        isNew: false,
+      });
       const second = await shortcut(token, {
         amount: 7.25,
         merchant: 'PUMA #4',
@@ -279,7 +311,51 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
         reviewStatus: TransactionReviewStatus.Confirmed,
         category: BudgetCategory.Ahorro,
         amountCents: 123456,
+        walletCardId: card.id,
       });
+      const { body: latest } = await asUser(accessToken)
+        .get('/api/shortcuts/status')
+        .expect(200);
+      expect(latest.lastTransaction.id).toBe(third.body.transactionId);
+    });
+
+    it('rememberMerchant: false confirms without learning; true (default) learns', async () => {
+      const { userId, accessToken, token } = await createUser('remember');
+
+      const once = await shortcut(token, {
+        amount: '14.50',
+        merchant: 'La Neveria Escalón',
+        card: 'BAC Visa Crédito',
+      }).expect(200);
+      await asUser(accessToken)
+        .patch(`/api/transactions/${once.body.transactionId}`)
+        .send({ category: 'Deseo', rememberMerchant: false })
+        .expect(200);
+      expect(await prisma.merchantRule.count({ where: { userId } })).toBe(0);
+      await expect(
+        prisma.transaction.findUniqueOrThrow({
+          where: { id: once.body.transactionId },
+        }),
+      ).resolves.toMatchObject({
+        category: BudgetCategory.Deseo,
+        reviewStatus: TransactionReviewStatus.Confirmed,
+      });
+
+      await asUser(accessToken)
+        .patch(`/api/transactions/${once.body.transactionId}`)
+        .send({ category: 'Deseo', rememberMerchant: 'no' })
+        .expect(400);
+      await asUser(accessToken)
+        .patch(`/api/transactions/${once.body.transactionId}`)
+        .send({ category: 'Deseo', rememberMerchant: 'false' })
+        .expect(400);
+      expect(await prisma.merchantRule.count({ where: { userId } })).toBe(0);
+
+      await asUser(accessToken)
+        .patch(`/api/transactions/${once.body.transactionId}`)
+        .send({ category: 'Deseo', rememberMerchant: true })
+        .expect(200);
+      expect(await prisma.merchantRule.count({ where: { userId } })).toBe(1);
     });
 
     it('answers a readable 400 for an invalid amount', async () => {
@@ -379,6 +455,8 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
       expect(confirmed).toMatchObject({
         category: BudgetCategory.Necesidad,
         reviewStatus: TransactionReviewStatus.Confirmed,
+        // The Gmail row isn't re-attributed to the Shortcuts card.
+        walletCardId: null,
       });
       expect(await prisma.transaction.count({ where: { userId } })).toBe(1);
       // BAC's description is the merchant: learned like a PATCH would.
@@ -449,6 +527,8 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
         defaultCategory: null,
         financialInstitutionId: null,
         institutionName: null,
+        configuredAt: expect.any(String),
+        isNew: false,
       });
       await asUser(accessToken)
         .post('/api/wallet-cards')
