@@ -20,6 +20,9 @@ export interface CreateProcessedEmailData {
   parsedAmount?: number | null;
   parsedDate?: Date | null;
   parsedDescription?: string | null;
+  /** Set at creation only for outcomes nobody must act on (a duplicate of
+   * a Shortcuts purchase, discarded silently). */
+  resolvedAt?: Date | null;
 }
 
 /** Prisma's unique-constraint-violation error code. */

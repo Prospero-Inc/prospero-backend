@@ -247,6 +247,32 @@ export class GmailSyncOrchestrator {
     institutionId: number,
     parsed: ParsedBankEmail,
   ): Promise<boolean> {
+    // Already recorded by the iPhone Shortcuts automation: discarded
+    // silently (resolvedAt set now, so no "possible duplicate" badge in the
+    // front) and not counted for the review notification.
+    const shortcutDuplicate =
+      await this.duplicateDetector.findShortcutDuplicate(
+        userId,
+        parsed.amount,
+        parsed.date,
+      );
+    if (shortcutDuplicate) {
+      await this.recordOutcome({
+        userId,
+        gmailMessageId: messageId,
+        senderEmail,
+        result: ProcessedEmailResult.PossibleDuplicate,
+        reason: PROCESSED_EMAIL_REASONS.SHORTCUT_DUPLICATE,
+        parserVersion,
+        relatedTransactionId: shortcutDuplicate.id,
+        parsedAmount: parsed.amount,
+        parsedDate: parsed.date,
+        parsedDescription: parsed.notes,
+        resolvedAt: new Date(),
+      });
+      return false;
+    }
+
     const duplicate = await this.duplicateDetector.findManualDuplicate(
       userId,
       parsed.amount,
