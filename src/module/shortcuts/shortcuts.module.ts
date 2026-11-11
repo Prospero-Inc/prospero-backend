@@ -5,6 +5,8 @@ import { WalletCardsModule } from '../wallet-cards/wallet-cards.module';
 import { MerchantRulesModule } from '../merchant-rules/merchant-rules.module';
 import { ShortcutTokensController } from './controllers/shortcut-tokens.controller';
 import { ShortcutTransactionsController } from './controllers/shortcut-transactions.controller';
+import { ShortcutStatusController } from './controllers/shortcut-status.controller';
+import { ShortcutStatusService } from './services/shortcut-status.service';
 import { ShortcutTokensRepository } from './repositories/shortcut-tokens.repository';
 import { ShortcutTokensService } from './services/shortcut-tokens.service';
 import { ShortcutTransactionsService } from './services/shortcut-transactions.service';
@@ -19,12 +21,17 @@ import { ShortcutTokenThrottleGuard } from './guards/shortcut-token-throttle.gua
  */
 @Module({
   imports: [TransactionsModule, WalletCardsModule, MerchantRulesModule],
-  controllers: [ShortcutTokensController, ShortcutTransactionsController],
+  controllers: [
+    ShortcutTokensController,
+    ShortcutTransactionsController,
+    ShortcutStatusController,
+  ],
   providers: [
     PrismaService,
     ShortcutTokensRepository,
     ShortcutTokensService,
     ShortcutTransactionsService,
+    ShortcutStatusService,
     ShortcutTokenGuard,
     ShortcutTokenThrottleGuard,
   ],

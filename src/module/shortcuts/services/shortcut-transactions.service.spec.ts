@@ -53,6 +53,7 @@ function row(overrides: Partial<Transaction>): Transaction {
     reviewStatus: TransactionReviewStatus.Confirmed,
     institutionId: null,
     gmailMessageId: null,
+    walletCardId: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -131,6 +132,7 @@ describe('ShortcutTransactionsService', () => {
         date: LOCAL_NOW,
         description: 'Puma',
         institutionId: 4,
+        walletCardId: 1,
         category: BudgetCategory.Deseo,
         reviewStatus: TransactionReviewStatus.Confirmed,
       });
@@ -175,6 +177,7 @@ describe('ShortcutTransactionsService', () => {
         date: LOCAL_NOW,
         description: 'Puma',
         institutionId: null,
+        walletCardId: 1,
         category: null,
         reviewStatus: TransactionReviewStatus.PendingReview,
         suggestedCategory: BudgetCategory.Deseo,

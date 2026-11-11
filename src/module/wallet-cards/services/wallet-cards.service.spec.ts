@@ -91,9 +91,11 @@ describe('WalletCardsService', () => {
 
   it('update can clear the default category and flattens the bank name', async () => {
     repository.findOneOwned.mockResolvedValue({ id: 1 });
+    const configuredAt = new Date();
     repository.update.mockResolvedValue({
       id: 1,
       defaultCategory: null,
+      configuredAt,
       financialInstitution: { name: 'BAC' },
     });
 
@@ -101,11 +103,14 @@ describe('WalletCardsService', () => {
 
     expect(repository.update).toHaveBeenCalledWith(1, {
       defaultCategory: null,
+      configuredAt: expect.any(Date),
     });
     expect(result).toEqual({
       id: 1,
       defaultCategory: null,
+      configuredAt,
       institutionName: 'BAC',
+      isNew: false,
     });
   });
 
@@ -116,5 +121,67 @@ describe('WalletCardsService', () => {
       NotFoundException,
     );
     expect(repository.delete).not.toHaveBeenCalled();
+  });
+  describe('isNew / configuredAt', () => {
+    it('a manually created card is configured (not new)', async () => {
+      repository.create.mockImplementation(async (_userId, data) => ({
+        id: 9,
+        ...data,
+        financialInstitution: null,
+      }));
+
+      const card = await service.create(5, { name: 'BAC Débito' });
+
+      expect(repository.create).toHaveBeenCalledWith(5, {
+        name: 'BAC Débito',
+        configuredAt: expect.any(Date),
+      });
+      expect(card.isNew).toBe(false);
+    });
+
+    it('an auto-registered card stays new', async () => {
+      repository.findByName.mockResolvedValue(null);
+      repository.create.mockImplementation(async (_userId, data) => ({
+        id: 10,
+        configuredAt: null,
+        ...data,
+        financialInstitution: null,
+      }));
+
+      const card = await service.findOrCreateByName(5, 'BAC Visa Crédito');
+
+      expect(repository.create).toHaveBeenCalledWith(5, {
+        name: 'BAC Visa Crédito',
+        defaultCategory: null,
+      });
+      expect(card).toMatchObject({ configuredAt: null, isNew: true });
+    });
+
+    it('a PATCH without defaultCategory does not configure the card', async () => {
+      repository.findOneOwned.mockResolvedValue({ id: 1 });
+      repository.update.mockResolvedValue({
+        id: 1,
+        configuredAt: null,
+        financialInstitution: null,
+      });
+
+      const result = await service.update(1, 5, { name: 'Otra' });
+
+      expect(repository.update).toHaveBeenCalledWith(1, { name: 'Otra' });
+      expect(result.isNew).toBe(true);
+    });
+
+    it('a PATCH choosing "Según el comercio" (null) configures it', async () => {
+      repository.findOneOwned.mockResolvedValue({ id: 1 });
+      repository.update.mockImplementation(async (_id, data) => ({
+        id: 1,
+        ...data,
+        financialInstitution: null,
+      }));
+
+      const result = await service.update(1, 5, { defaultCategory: null });
+
+      expect(result).toMatchObject({ defaultCategory: null, isNew: false });
+    });
   });
 });

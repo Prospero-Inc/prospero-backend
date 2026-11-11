@@ -6,6 +6,7 @@ export interface WalletCardData {
   name?: string;
   defaultCategory?: BudgetCategory | null;
   financialInstitutionId?: number | null;
+  configuredAt?: Date | null;
 }
 
 export type WalletCardWithInstitution = WalletCard & {
