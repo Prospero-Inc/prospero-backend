@@ -19,6 +19,8 @@ import { ReviewQueueModule } from './module/review-queue/review-queue.module';
 import { HealthModule } from './module/health/health.module';
 import { MoneyModule } from './module/money/money.module';
 import { NotificationsModule } from './module/notifications/notifications.module';
+import { MerchantRulesModule } from './module/merchant-rules/merchant-rules.module';
+import { WalletCardsModule } from './module/wallet-cards/wallet-cards.module';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { NotificationsModule } from './module/notifications/notifications.module
     GmailSyncModule,
     ReviewQueueModule,
     NotificationsModule,
+    MerchantRulesModule,
+    WalletCardsModule,
     HealthModule,
     MoneyModule,
   ],
