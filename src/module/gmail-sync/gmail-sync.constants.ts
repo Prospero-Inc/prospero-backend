@@ -16,6 +16,8 @@ export const PROCESSED_EMAIL_REASONS = {
   NO_PARSER_CONFIGURED: 'sin parser configurado',
   NOT_FINANCIAL: 'correo no financiero',
   POSSIBLE_DUPLICATE: 'posible duplicado de un movimiento manual',
+  SHORTCUT_DUPLICATE:
+    'ya registrado desde Atajos de iPhone — descartado sin aviso',
   INCOME_DETECTION_DISABLED:
     'detección automática de ingresos deshabilitada — se ingresan manualmente',
   unknownTransactionType: (transactionType: string) =>
