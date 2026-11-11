@@ -24,6 +24,9 @@ model User {
   notificationPreference NotificationPreference?
   notificationLogs       NotificationLog[]
   pushSubscriptions      PushSubscription[]
+  shortcutTokens         ShortcutToken[]
+  walletCards            WalletCard[]
+  merchantRules          MerchantRule[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   apiKey                 String?                 @unique @map("api_key")
@@ -54,26 +57,30 @@ enum PayFrequency {
 }
 
 model Transaction {
-  id              Int                     @id @default(autoincrement())
-  userId          Int                     @map("user_id")
-  user            User                    @relation(fields: [userId], references: [id])
-  amount          Float
+  id                Int                     @id @default(autoincrement())
+  userId            Int                     @map("user_id")
+  user              User                    @relation(fields: [userId], references: [id])
+  amount            Float
   /// Integer-cents twin of `amount` (D3, double-write phase).
-  amountCents     Int?                    @map("amount_cents")
-  date            DateTime
-  category        BudgetCategory?
-  description     String?
-  periodOverride  PeriodOverride?         @map("period_override")
-  fixedExpenseId  Int?                    @map("fixed_expense_id")
-  fixedExpense    FixedExpense?           @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
-  source          MovementSource          @default(Manual)
-  reviewStatus    TransactionReviewStatus @default(Confirmed) @map("review_status")
-  institutionId   Int?                    @map("institution_id")
-  institution     FinancialInstitution?   @relation(fields: [institutionId], references: [id], onDelete: SetNull)
-  gmailMessageId  String?                 @map("gmail_message_id")
-  processedEmails ProcessedEmail[]
-  createdAt       DateTime                @default(now()) @map("created_at")
-  updatedAt       DateTime                @updatedAt @map("updated_at")
+  amountCents       Int?                    @map("amount_cents")
+  date              DateTime
+  category          BudgetCategory?
+  /// Category the review queue pre-selects for a row that still has none
+  /// (today only Shortcut rows nothing could classify). Never counted as
+  /// the real category.
+  suggestedCategory BudgetCategory?         @map("suggested_category")
+  description       String?
+  periodOverride    PeriodOverride?         @map("period_override")
+  fixedExpenseId    Int?                    @map("fixed_expense_id")
+  fixedExpense      FixedExpense?           @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
+  source            MovementSource          @default(Manual)
+  reviewStatus      TransactionReviewStatus @default(Confirmed) @map("review_status")
+  institutionId     Int?                    @map("institution_id")
+  institution       FinancialInstitution?   @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  gmailMessageId    String?                 @map("gmail_message_id")
+  processedEmails   ProcessedEmail[]
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
 
   @@index([date, category], name: "transaction_date_category_idx")
   @@index([userId, date], name: "transaction_user_date_idx")
@@ -145,6 +152,9 @@ enum IncomeType {
 enum MovementSource {
   Manual
   Gmail
+  /// iPhone Shortcuts "Transaction" automation (Apple Pay / Wallet), via
+  /// POST /shortcuts/transactions.
+  Shortcut
 }
 
 enum TransactionReviewStatus {
@@ -209,6 +219,7 @@ model FinancialInstitution {
   // configured yet" — see gmail-sync's registry for the source of truth.
   parserKey    String?             @map("parser_key")
   senders      InstitutionSender[]
+  walletCards  WalletCard[]
   transactions Transaction[]
   salaries     Salary[]
   createdAt    DateTime            @default(now()) @map("created_at")
@@ -373,4 +384,57 @@ model SchedulerLock {
   lockedBy    String   @map("locked_by")
 
   @@map("scheduler_locks")
+}
+
+/// Long-lived token for the iPhone Shortcuts automation, which can't do the
+/// JWT login/refresh dance. Only the SHA-256 (hex) of the raw `prs_...` value
+/// is stored; the raw value is shown to the user once, at creation.
+model ShortcutToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique @map("token_hash")
+  /// Space-separated scopes. Only "shortcut:transactions" exists today.
+  scope      String    @default("shortcut:transactions")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("shortcut_tokens")
+}
+
+/// A card as Apple Wallet names it (the exact `card` string Shortcuts
+/// sends). Auto-registered on first use with no default category.
+model WalletCard {
+  id                     Int                   @id @default(autoincrement())
+  userId                 Int                   @map("user_id")
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                   String
+  /// null = classify by merchant (MerchantRule) or send to review.
+  defaultCategory        BudgetCategory?       @map("default_category")
+  financialInstitutionId Int?                  @map("financial_institution_id")
+  financialInstitution   FinancialInstitution? @relation(fields: [financialInstitutionId], references: [id], onDelete: SetNull)
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+
+  @@unique([userId, name])
+  @@map("wallet_cards")
+}
+
+/// Learned "this merchant is always X" rule, keyed by
+/// `normalizeMerchantKey(description)`. Written when the user sets a
+/// category on an existing movement (PATCH /transactions/:id).
+model MerchantRule {
+  id          Int            @id @default(autoincrement())
+  userId      Int            @map("user_id")
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantKey String         @map("merchant_key")
+  category    BudgetCategory
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@unique([userId, merchantKey])
+  @@map("merchant_rules")
 }
