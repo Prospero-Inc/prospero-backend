@@ -5,10 +5,16 @@ import { TransactionsService } from 'src/module/transactions/services/transactio
 
 describe('DuplicateDetectorService', () => {
   let service: DuplicateDetectorService;
-  let transactionsService: { findAllForUser: jest.Mock };
+  let transactionsService: {
+    findAllForUser: jest.Mock;
+    findDuplicateCandidates: jest.Mock;
+  };
 
   beforeEach(async () => {
-    transactionsService = { findAllForUser: jest.fn() };
+    transactionsService = {
+      findAllForUser: jest.fn(),
+      findDuplicateCandidates: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -106,5 +112,64 @@ describe('DuplicateDetectorService', () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  describe('findShortcutDuplicate', () => {
+    const shortcut = (amount: number, date: string, id = 1) =>
+      ({
+        id,
+        userId: 5,
+        amount,
+        date: new Date(date),
+        source: MovementSource.Shortcut,
+      }) as any;
+
+    it('queries Shortcut rows from the day before to the day after', async () => {
+      transactionsService.findDuplicateCandidates.mockResolvedValue([]);
+
+      await service.findShortcutDuplicate(
+        5,
+        9.99,
+        new Date('2026-11-10T21:30:00.000Z'),
+      );
+
+      expect(transactionsService.findDuplicateCandidates).toHaveBeenCalledWith(
+        5,
+        {
+          sources: [MovementSource.Shortcut],
+          dateFrom: new Date('2026-11-09T00:00:00.000Z'),
+          dateTo: new Date('2026-11-11T23:59:59.999Z'),
+        },
+      );
+    });
+
+    it('matches ±1 cent and ±1 calendar day, closest first', async () => {
+      const far = shortcut(9.98, '2026-11-09T08:00:00.000Z', 30);
+      const near = shortcut(10.0, '2026-11-11T01:00:00.000Z', 31);
+      transactionsService.findDuplicateCandidates.mockResolvedValue([far, near]);
+
+      const result = await service.findShortcutDuplicate(
+        5,
+        9.99,
+        new Date('2026-11-10T21:30:00.000Z'),
+      );
+
+      expect(result).toBe(near);
+    });
+
+    it('does not match a 2-cent difference or a row two days away', async () => {
+      transactionsService.findDuplicateCandidates.mockResolvedValue([
+        shortcut(10.01, '2026-11-10T10:00:00.000Z', 32),
+        shortcut(9.99, '2026-11-08T23:00:00.000Z', 33),
+      ]);
+
+      const result = await service.findShortcutDuplicate(
+        5,
+        9.99,
+        new Date('2026-11-10T21:30:00.000Z'),
+      );
+
+      expect(result).toBeNull();
+    });
   });
 });

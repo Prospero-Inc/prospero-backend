@@ -7,6 +7,7 @@ import { ProcessedEmailRepository } from '../repositories/processed-email.reposi
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
 import { FinancialInstitutionsService } from 'src/module/financial-institutions/services/financial-institutions.service';
 import { TransactionsService } from 'src/module/transactions/services/transactions.service';
+import { PROCESSED_EMAIL_REASONS } from '../gmail-sync.constants';
 
 const AGRICOLA_SENDER = {
   id: 1,
@@ -57,7 +58,10 @@ describe('GmailSyncOrchestrator', () => {
     findByUserAndMessage: jest.Mock;
     create: jest.Mock;
   };
-  let duplicateDetector: { findManualDuplicate: jest.Mock };
+  let duplicateDetector: {
+    findManualDuplicate: jest.Mock;
+    findShortcutDuplicate: jest.Mock;
+  };
   let transactionsService: { createFromGmail: jest.Mock };
 
   const connection = {
@@ -81,6 +85,7 @@ describe('GmailSyncOrchestrator', () => {
     };
     duplicateDetector = {
       findManualDuplicate: jest.fn().mockResolvedValue(null),
+      findShortcutDuplicate: jest.fn().mockResolvedValue(null),
     };
     transactionsService = {
       createFromGmail: jest.fn().mockResolvedValue({ id: 100 }),
@@ -168,6 +173,34 @@ describe('GmailSyncOrchestrator', () => {
       expect.objectContaining({
         result: ProcessedEmailResult.PossibleDuplicate,
         relatedTransactionId: 555,
+      }),
+    );
+    expect(result).toEqual({ transactionsCreated: 0 });
+  });
+
+  it('an expense already recorded from iPhone Shortcuts is a silently resolved PossibleDuplicate, not counted', async () => {
+    gmailApiClient.listMessageIds.mockResolvedValue([{ id: 'msg-1' }]);
+    gmailApiClient.getMessage.mockResolvedValue(buildRecargaMessage());
+    duplicateDetector.findShortcutDuplicate.mockResolvedValue({ id: 777 });
+
+    const result = await orchestrator.syncConnection(connection);
+
+    expect(duplicateDetector.findShortcutDuplicate).toHaveBeenCalledWith(
+      7,
+      1.5,
+      new Date('2026-10-07T17:23:44.000Z'),
+    );
+    expect(transactionsService.createFromGmail).not.toHaveBeenCalled();
+    expect(duplicateDetector.findManualDuplicate).not.toHaveBeenCalled();
+    expect(processedEmailRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: ProcessedEmailResult.PossibleDuplicate,
+        reason: PROCESSED_EMAIL_REASONS.SHORTCUT_DUPLICATE,
+        relatedTransactionId: 777,
+        parsedAmount: 1.5,
+        parsedDate: new Date('2026-10-07T17:23:44.000Z'),
+        parsedDescription: expect.any(String),
+        resolvedAt: expect.any(Date),
       }),
     );
     expect(result).toEqual({ transactionsCreated: 0 });

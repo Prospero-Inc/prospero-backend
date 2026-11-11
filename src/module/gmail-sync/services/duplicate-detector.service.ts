@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { MovementSource, Transaction } from '@prisma/client';
 import { TransactionsService } from 'src/module/transactions/services/transactions.service';
+import { toCents } from 'src/module/money/to-cents.util';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function startOfUTCDay(date: Date): Date {
   return new Date(
@@ -53,5 +56,43 @@ export class DuplicateDetectorService {
     );
 
     return match ?? null;
+  }
+
+  /**
+   * The other direction of the iPhone Shortcuts dedupe: an Apple Pay
+   * purchase the Shortcuts automation already recorded (`source: Shortcut`)
+   * and its bank email arriving later. Deliberately looser than
+   * `findManualDuplicate` (which stays strict, see the class comment):
+   * Shortcuts and the bank email describe the very same card swipe, but the
+   * bank may date it a day off and round differently, so ±1 cent and ±1
+   * calendar day (both dates are UTC-literal local times).
+   */
+  async findShortcutDuplicate(
+    userId: number,
+    amount: number,
+    date: Date,
+  ): Promise<Transaction | null> {
+    const day = startOfUTCDay(date).getTime();
+    const candidates = await this.transactionsService.findDuplicateCandidates(
+      userId,
+      {
+        sources: [MovementSource.Shortcut],
+        dateFrom: new Date(day - DAY_MS),
+        dateTo: new Date(day + 2 * DAY_MS - 1),
+      },
+    );
+
+    const matches = candidates.filter(
+      (transaction) =>
+        transaction.source === MovementSource.Shortcut &&
+        Math.abs(toCents(transaction.amount) - toCents(amount)) <= 1 &&
+        Math.abs(startOfUTCDay(transaction.date).getTime() - day) <= DAY_MS,
+    );
+    matches.sort(
+      (a, b) =>
+        Math.abs(a.date.getTime() - date.getTime()) -
+        Math.abs(b.date.getTime() - date.getTime()),
+    );
+    return matches[0] ?? null;
   }
 }
