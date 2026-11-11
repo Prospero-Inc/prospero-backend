@@ -21,6 +21,7 @@ import { MoneyModule } from './module/money/money.module';
 import { NotificationsModule } from './module/notifications/notifications.module';
 import { MerchantRulesModule } from './module/merchant-rules/merchant-rules.module';
 import { WalletCardsModule } from './module/wallet-cards/wallet-cards.module';
+import { ShortcutsModule } from './module/shortcuts/shortcuts.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { WalletCardsModule } from './module/wallet-cards/wallet-cards.module';
     NotificationsModule,
     MerchantRulesModule,
     WalletCardsModule,
+    ShortcutsModule,
     HealthModule,
     MoneyModule,
   ],

@@ -1,0 +1,15 @@
+{
+    "saved": "Saved: {amount} at {merchant} · {category}",
+    "pendingReview": "to review",
+    "alreadyRegistered": "Already recorded",
+    "alreadyRegisteredWithCategory": "Already recorded · {category}",
+    "invalidAmount": "Invalid amount. Send a number greater than 0, for example 12.50",
+    "invalidDate": "Invalid date. Send occurredAt as ISO 8601",
+    "invalidToken": "Invalid or revoked Shortcuts token",
+    "tooManyRequests": "Too many movements in a row. Wait a minute",
+    "category": {
+        "Necesidad": "Need",
+        "Deseo": "Want",
+        "Ahorro": "Savings"
+    }
+}
