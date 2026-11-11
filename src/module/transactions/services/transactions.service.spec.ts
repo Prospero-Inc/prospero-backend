@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { MovementSource, TransactionReviewStatus } from '@prisma/client';
 import { TransactionsService } from './transactions.service';
 import { TransactionsRepository } from '../repositories/transactions.repository';
+import { MerchantRulesService } from 'src/module/merchant-rules/services/merchant-rules.service';
 
 describe('TransactionsService', () => {
   let service: TransactionsService;
@@ -17,7 +18,13 @@ describe('TransactionsService', () => {
     delete: jest.Mock;
   };
 
+  let merchantRules: { upsert: jest.Mock; find: jest.Mock };
+
   beforeEach(async () => {
+    merchantRules = {
+      upsert: jest.fn().mockResolvedValue(null),
+      find: jest.fn(),
+    };
     repository = {
       create: jest.fn(),
       findManyByUser: jest.fn(),
@@ -33,6 +40,7 @@ describe('TransactionsService', () => {
       providers: [
         TransactionsService,
         { provide: TransactionsRepository, useValue: repository },
+        { provide: MerchantRulesService, useValue: merchantRules },
       ],
     }).compile();
 
@@ -239,5 +247,125 @@ describe('TransactionsService', () => {
       NotFoundException,
     );
     expect(repository.delete).not.toHaveBeenCalled();
+  });
+  describe('merchant rule learning', () => {
+    it('learns the merchant when a review-queue row is confirmed with a category (Shortcut)', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 1,
+        userId: 5,
+        source: MovementSource.Shortcut,
+        description: 'Puma',
+        reviewStatus: TransactionReviewStatus.PendingReview,
+        institution: null,
+      });
+      repository.update.mockResolvedValue({ id: 1 });
+
+      await service.update(1, 5, { category: 'Deseo' } as any);
+
+      expect(merchantRules.upsert).toHaveBeenCalledWith(5, 'Puma', 'Deseo');
+    });
+
+    it('learns from a BAC Gmail row (description is the merchant)', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 2,
+        userId: 5,
+        source: MovementSource.Gmail,
+        description: 'ELECTRONICA STEREN',
+        reviewStatus: TransactionReviewStatus.PendingReview,
+        institution: { parserKey: 'bac_credomatic' },
+      });
+      repository.update.mockResolvedValue({ id: 2 });
+
+      await service.update(2, 5, { category: 'Necesidad' } as any);
+
+      expect(merchantRules.upsert).toHaveBeenCalledWith(
+        5,
+        'ELECTRONICA STEREN',
+        'Necesidad',
+      );
+    });
+
+    it('does not learn from a Banco Agrícola Gmail row (description is a field blob)', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 3,
+        userId: 5,
+        source: MovementSource.Gmail,
+        description: 'Compañía: CLARO, PREPAGO (RECARGA); Paquete: Pack',
+        reviewStatus: TransactionReviewStatus.PendingReview,
+        institution: { parserKey: 'banco_agricola' },
+      });
+      repository.update.mockResolvedValue({ id: 3 });
+
+      await service.update(3, 5, { category: 'Necesidad' } as any);
+
+      expect(repository.update).toHaveBeenCalled();
+      expect(merchantRules.upsert).not.toHaveBeenCalled();
+    });
+
+    it('learns from an edited Manual row, using the new description when the PATCH changes it', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 4,
+        userId: 5,
+        source: MovementSource.Manual,
+        description: 'old',
+        reviewStatus: TransactionReviewStatus.Confirmed,
+        institution: null,
+      });
+      repository.update.mockResolvedValue({ id: 4 });
+
+      await service.update(4, 5, {
+        category: 'Ahorro',
+        description: 'Pricesmart',
+      } as any);
+
+      expect(merchantRules.upsert).toHaveBeenCalledWith(5, 'Pricesmart', 'Ahorro');
+    });
+
+    it('does not learn when the PATCH has no category or the row has no description', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 5,
+        userId: 5,
+        source: MovementSource.Manual,
+        description: null,
+        reviewStatus: TransactionReviewStatus.Confirmed,
+        institution: null,
+      });
+      repository.update.mockResolvedValue({ id: 5 });
+
+      await service.update(5, 5, { amount: 3 } as any);
+      await service.update(5, 5, { category: 'Deseo' } as any);
+
+      expect(merchantRules.upsert).not.toHaveBeenCalled();
+    });
+
+    it('never learns when creating a manual expense', async () => {
+      repository.create.mockResolvedValue({ id: 9 });
+
+      await service.create(5, {
+        amount: 3,
+        date: new Date(),
+        category: 'Deseo',
+        description: 'Puma',
+      } as any);
+
+      expect(merchantRules.upsert).not.toHaveBeenCalled();
+    });
+
+    it('still returns the updated row when learning fails', async () => {
+      repository.findOneOwned.mockResolvedValue({
+        id: 6,
+        userId: 5,
+        source: MovementSource.Shortcut,
+        description: 'Puma',
+        reviewStatus: TransactionReviewStatus.PendingReview,
+        institution: null,
+      });
+      repository.update.mockResolvedValue({ id: 6 });
+      merchantRules.upsert.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.update(6, 5, { category: 'Deseo' } as any),
+      ).resolves.toEqual({ id: 6 });
+    });
   });
 });

@@ -1,12 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
+  BudgetCategory,
   MovementSource,
   Transaction,
   TransactionReviewStatus,
 } from '@prisma/client';
+import { MerchantRulesService } from 'src/module/merchant-rules/services/merchant-rules.service';
+import { NON_LEARNABLE_PARSER_KEYS } from 'src/module/merchant-rules/merchant-rules.constants';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import {
+  DuplicateCandidateFilters,
   TransactionFilters,
   TransactionsRepository,
 } from '../repositories/transactions.repository';
@@ -34,6 +38,19 @@ export interface CreateGmailTransactionInput {
   // keeps passing it.
   institutionId?: number;
   gmailMessageId: string;
+}
+
+// Internal-only input for the iPhone Shortcuts endpoint (ShortcutsService).
+// `category: null` + `reviewStatus: PendingReview` puts the row in the same
+// review queue Gmail detections use; `suggestedCategory` pre-selects one.
+export interface CreateShortcutTransactionInput {
+  amount: number;
+  date: Date;
+  description: string;
+  category: BudgetCategory | null;
+  reviewStatus: TransactionReviewStatus;
+  suggestedCategory?: BudgetCategory | null;
+  institutionId?: number | null;
 }
 
 // Same widening pattern as CreateTransactionInput: reviewStatus is never on
@@ -74,8 +91,11 @@ export const PENDING_REVIEW_TRANSACTION_STATUSES: TransactionReviewStatus[] = [
 
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name);
+
   constructor(
     private readonly transactionsRepository: TransactionsRepository,
+    private readonly merchantRulesService: MerchantRulesService,
   ) {}
 
   create(userId: number, createTransactionDto: CreateTransactionInput) {
@@ -89,6 +109,34 @@ export class TransactionsService {
     data: CreateGmailTransactionInput,
   ): Promise<Transaction> {
     return this.transactionsRepository.createFromGmail(userId, data);
+  }
+
+  /** Called only by ShortcutsService — creates a `source: Shortcut` row. */
+  createFromShortcut(
+    userId: number,
+    data: CreateShortcutTransactionInput,
+  ): Promise<Transaction> {
+    return this.transactionsRepository.createFromShortcut(userId, data);
+  }
+
+  /** Candidate rows for duplicate detection (Shortcuts and Gmail sync);
+   * amount matching is left to the caller, in cents. */
+  findDuplicateCandidates(
+    userId: number,
+    filters: DuplicateCandidateFilters,
+  ): Promise<Transaction[]> {
+    return this.transactionsRepository.findDuplicateCandidates(userId, filters);
+  }
+
+  findRecentClassifiedWithDescription(userId: number, take: number) {
+    return this.transactionsRepository.findRecentClassifiedWithDescription(
+      userId,
+      take,
+    );
+  }
+
+  countConfirmedByCategory(userId: number) {
+    return this.transactionsRepository.countConfirmedByCategory(userId);
   }
 
   findAllForUser(userId: number, filters: TransactionFilters = {}) {
@@ -191,7 +239,54 @@ export class TransactionsService {
       data.reviewStatus = TransactionReviewStatus.Confirmed;
     }
 
-    return this.transactionsRepository.update(id, data);
+    const updated = await this.transactionsRepository.update(id, data);
+
+    const category = updateTransactionDto.category;
+    if (category) {
+      await this.learnMerchantRule(
+        userId,
+        existing,
+        category,
+        updateTransactionDto.description ?? existing.description,
+      );
+    }
+
+    return updated;
+  }
+
+  /**
+   * Setting a category on an existing movement (confirming it in the review
+   * queue or editing it, any source) teaches "this merchant is X" for the
+   * Shortcuts endpoint. Creating a manual expense does NOT (co-founder
+   * decision), and Gmail rows from a parser whose description isn't a
+   * merchant (Banco Agrícola, see NON_LEARNABLE_PARSER_KEYS) are skipped.
+   * Best effort: a failure here never fails the user's PATCH.
+   */
+  private async learnMerchantRule(
+    userId: number,
+    existing: Transaction & { institution?: { parserKey: string | null } | null },
+    category: BudgetCategory,
+    description: string | null,
+  ): Promise<void> {
+    if (!description) return;
+
+    const parserKey = existing.institution?.parserKey;
+    if (
+      existing.source === MovementSource.Gmail &&
+      parserKey &&
+      NON_LEARNABLE_PARSER_KEYS.includes(parserKey)
+    ) {
+      return;
+    }
+
+    try {
+      await this.merchantRulesService.upsert(userId, description, category);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not learn merchant rule for transaction ${existing.id}: ${message}`,
+      );
+    }
   }
 
   async remove(id: number, userId: number) {

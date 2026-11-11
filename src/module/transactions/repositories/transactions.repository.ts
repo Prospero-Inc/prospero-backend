@@ -1,15 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import {
+  BudgetCategory,
   MovementSource,
   ProcessedEmailResult,
+  Transaction,
   TransactionReviewStatus,
 } from '@prisma/client';
 import { PrismaService } from 'src/module/prisma.service';
 import {
   CreateGmailTransactionInput,
+  CreateShortcutTransactionInput,
   CreateTransactionInput,
   UpdateTransactionInput,
 } from '../services/transactions.service';
+
+/** Narrow candidate fetch for duplicate detection: amounts are compared in
+ * cents by the caller (reads still use the Float column, see CLAUDE.md). */
+export interface DuplicateCandidateFilters {
+  sources: MovementSource[];
+  dateFrom?: Date;
+  dateTo?: Date;
+  createdAfter?: Date;
+}
 
 export interface TransactionFilters {
   from?: Date;
@@ -52,6 +64,82 @@ export class TransactionsRepository {
         reviewStatus: TransactionReviewStatus.PendingReview,
       },
     });
+  }
+
+  createFromShortcut(userId: number, data: CreateShortcutTransactionInput) {
+    return this.prisma.transaction.create({
+      data: {
+        userId,
+        amount: data.amount,
+        date: data.date,
+        description: data.description,
+        category: data.category,
+        suggestedCategory: data.suggestedCategory,
+        reviewStatus: data.reviewStatus,
+        institutionId: data.institutionId,
+        source: MovementSource.Shortcut,
+      },
+    });
+  }
+
+  findDuplicateCandidates(
+    userId: number,
+    filters: DuplicateCandidateFilters,
+  ): Promise<Transaction[]> {
+    const { sources, dateFrom, dateTo, createdAfter } = filters;
+    return this.prisma.transaction.findMany({
+      where: {
+        userId,
+        source: { in: sources },
+        ...((dateFrom || dateTo) && {
+          date: {
+            ...(dateFrom && { gte: dateFrom }),
+            ...(dateTo && { lte: dateTo }),
+          },
+        }),
+        ...(createdAfter && { createdAt: { gte: createdAfter } }),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Latest confirmed, classified rows with a description — input for the
+   * Shortcuts `suggestedCategory` heuristic. */
+  findRecentClassifiedWithDescription(
+    userId: number,
+    take: number,
+  ): Promise<{ description: string | null; category: BudgetCategory | null }[]> {
+    return this.prisma.transaction.findMany({
+      where: {
+        userId,
+        reviewStatus: TransactionReviewStatus.Confirmed,
+        category: { not: null },
+        description: { not: null },
+      },
+      select: { description: true, category: true },
+      orderBy: { date: 'desc' },
+      take,
+    });
+  }
+
+  async countConfirmedByCategory(
+    userId: number,
+  ): Promise<{ category: BudgetCategory; count: number }[]> {
+    const rows = await this.prisma.transaction.groupBy({
+      by: ['category'],
+      where: {
+        userId,
+        reviewStatus: TransactionReviewStatus.Confirmed,
+        category: { not: null },
+      },
+      _count: { _all: true },
+    });
+    return rows
+      .filter((row) => row.category !== null)
+      .map((row) => ({
+        category: row.category as BudgetCategory,
+        count: row._count._all,
+      }));
   }
 
   findManyByUser(userId: number, filters: TransactionFilters = {}) {
@@ -134,9 +222,12 @@ export class TransactionsRepository {
     });
   }
 
+  /** Includes the institution's `parserKey`: `TransactionsService.update`
+   * needs it to decide whether a category can be learned as a MerchantRule. */
   findOneOwned(id: number, userId: number) {
     return this.prisma.transaction.findFirst({
       where: { id, userId },
+      include: { institution: { select: { parserKey: true } } },
     });
   }
 
