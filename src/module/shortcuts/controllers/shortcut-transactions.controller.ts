@@ -6,7 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateShortcutTransactionDto } from '../dto/create-shortcut-transaction.dto';
 import { ShortcutTokenGuard } from '../guards/shortcut-token.guard';
 import { ShortcutTokenThrottleGuard } from '../guards/shortcut-token-throttle.guard';
@@ -26,7 +26,11 @@ import {
  * Guard order: per-token rate limit first (no DB hit), then the token.
  */
 @ApiTags('shortcuts')
-@ApiBearerAuth('JWT-auth')
+@ApiHeader({
+  name: 'Authorization',
+  description: 'Bearer prs_... (token de Atajos, no el JWT de sesión).',
+  required: true,
+})
 @UseGuards(ShortcutTokenThrottleGuard, ShortcutTokenGuard)
 @Controller('shortcuts/transactions')
 export class ShortcutTransactionsController {
