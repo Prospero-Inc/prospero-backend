@@ -1,0 +1,15 @@
+{
+    "saved": "Guardado: {amount} en {merchant} · {category}",
+    "pendingReview": "por revisar",
+    "alreadyRegistered": "Ya estaba registrado",
+    "alreadyRegisteredWithCategory": "Ya estaba registrado · {category}",
+    "invalidAmount": "Monto inválido. Enviá un número mayor que 0, por ejemplo 12.50",
+    "invalidDate": "Fecha inválida. Enviá occurredAt en formato ISO 8601",
+    "invalidToken": "Token de Atajos inválido o revocado",
+    "tooManyRequests": "Demasiados movimientos seguidos. Esperá un minuto",
+    "category": {
+        "Necesidad": "Necesidad",
+        "Deseo": "Deseo",
+        "Ahorro": "Ahorro"
+    }
+}
