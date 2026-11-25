@@ -405,3 +405,54 @@ describe('PeriodsService period summaries', () => {
     });
   });
 });
+
+/** plan-rendimiento B4: "today" is the El Salvador date, whatever the
+ * process timezone (run under TZ=America/El_Salvador and TZ=UTC). */
+describe('PeriodsService day counts', () => {
+  function serviceWithPaydays(...dates: string[]) {
+    return new PeriodsService(
+      {
+        findById: jest.fn().mockResolvedValue({
+          needsPercent: 0.5,
+          wantsPercent: 0.3,
+          savingsPercent: 0.2,
+          payFrequency: PayFrequency.Biweekly,
+        }),
+      } as any,
+      {
+        findAllForUser: jest.fn().mockResolvedValue(
+          dates.map((date, id) => ({
+            id,
+            date: d(date),
+            amount: 500,
+            type: IncomeType.Payroll,
+          })),
+        ),
+      } as any,
+      { findAllForUser: jest.fn().mockResolvedValue([]) } as any,
+    );
+  }
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it.each([
+    ['08:00 on payday', '2026-10-31T14:00:00.000Z', 0, 15],
+    ['20:00 on payday (next day in UTC)', '2026-11-01T02:00:00.000Z', 0, 15],
+    ['00:30 the day after', '2026-11-01T06:30:00.000Z', 1, 14],
+  ])(
+    '%s (%s) → elapsed %i, remaining %i',
+    async (_, now, elapsed, remaining) => {
+      jest.useFakeTimers({ now: new Date(now) });
+      const service = serviceWithPaydays('2026-10-15', '2026-10-31');
+
+      const current = await service.getCurrentPeriodSummary(5);
+      expect(current.daysElapsed).toBe(elapsed);
+      expect(current.estimatedDaysRemaining).toBe(remaining);
+
+      const [, previous] = await service.listPeriods(5);
+      expect(previous.daysElapsed).toBe(16 + elapsed);
+    },
+  );
+});

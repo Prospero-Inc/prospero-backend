@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { differenceInCalendarDays } from 'date-fns';
 import { IncomeType, Salary, Transaction } from '@prisma/client';
+import {
+  APP_TIME_ZONE,
+  differenceInUTCDays,
+  resolveLocalDate,
+} from 'src/lib/dates/local-date';
 import { UserService } from '../user/user.service';
 import {
   SalaryService,
@@ -167,6 +171,9 @@ export class PeriodsService {
       ? estimateNextPaymentDate(lastPayrollDate, frequency)
       : null;
 
+    // The user's calendar date, not the process timezone's (plan B4).
+    const today = resolveLocalDate(new Date(), APP_TIME_ZONE);
+
     return {
       key: periodKey(period),
       startDate: period.startDate,
@@ -177,11 +184,11 @@ export class PeriodsService {
       balance: income - totalSpent,
       budget,
       daysElapsed: period.startDate
-        ? differenceInCalendarDays(new Date(), period.startDate)
+        ? differenceInUTCDays(today, period.startDate)
         : null,
       estimatedNextPaymentDate,
       estimatedDaysRemaining: estimatedNextPaymentDate
-        ? differenceInCalendarDays(estimatedNextPaymentDate, new Date())
+        ? differenceInUTCDays(estimatedNextPaymentDate, today)
         : null,
       recentTransactions: [...periodTransactions]
         .sort((a, b) => b.date.getTime() - a.date.getTime())
