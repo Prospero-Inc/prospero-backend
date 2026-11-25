@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   BudgetCategory,
   MovementSource,
+  Prisma,
   ProcessedEmailResult,
   Transaction,
   TransactionReviewStatus,
@@ -69,8 +70,12 @@ export class TransactionsRepository {
     });
   }
 
-  createFromGmail(userId: number, data: CreateGmailTransactionInput) {
-    return this.prisma.transaction.create({
+  createFromGmail(
+    userId: number,
+    data: CreateGmailTransactionInput,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
+    return client.transaction.create({
       data: {
         userId,
         amount: data.amount,

@@ -21,14 +21,11 @@ import { UserService } from '../../user/user.service';
 import {
   ApiBearerAuth,
   ApiBody,
-  ApiInternalServerErrorResponse,
-  ApiOkResponse,
   ApiOperation,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { SalaryDetailsDto } from '../dto/salary-details.dto';
 import { FindSalaryQueryDto } from '../dto/find-salary-query.dto';
 
 @ApiTags('salary')
@@ -128,18 +125,5 @@ export class SalaryController {
       createAmountDto.amount,
       strategy,
     );
-  }
-
-  @Get('details')
-  @ApiOperation({ summary: 'Obtener detalles del salario del usuario' })
-  @ApiOkResponse({
-    description: 'Detalles del salario obtenidos exitosamente',
-    type: SalaryDetailsDto,
-  })
-  @ApiInternalServerErrorResponse({
-    description: 'Error al obtener los detalles del salario',
-  })
-  async getUserSalaryDetails(@Request() req) {
-    return this.salaryService.getUserSalaryDetails(req.user.userId);
   }
 }

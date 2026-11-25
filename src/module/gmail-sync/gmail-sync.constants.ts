@@ -6,6 +6,10 @@ export const GMAIL_SYNC_CONCURRENCY = 3;
  * pass is expected to take, shorter than the hour between runs. */
 export const GMAIL_SYNC_LOCK_TTL_MS = 50 * 60 * 1000;
 
+/** Per-user lease around one connection's sync (cron or sync-now). Short so
+ * a crashed run only blocks that user's next sync for a few minutes. */
+export const GMAIL_SYNC_USER_LOCK_TTL_MS = 10 * 60 * 1000;
+
 /**
  * Stable, human-readable `ProcessedEmail.reason` strings — centralized so
  * the orchestrator and its tests agree on exact wording, mirroring how
