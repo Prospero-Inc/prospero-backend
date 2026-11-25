@@ -39,6 +39,17 @@ export class RefreshTokenRepository {
     });
   }
 
+  /**
+   * Revokes the token only if it is still usable, in a single conditional
+   * UPDATE: of two concurrent rotations exactly one gets `count === 1`.
+   */
+  revokeIfActive(tokenHash: string, now: Date): Promise<{ count: number }> {
+    return this.prisma.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null, expiresAt: { gt: now } },
+      data: { revokedAt: now },
+    });
+  }
+
   revokeAllForUser(userId: number): Promise<{ count: number }> {
     return this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },

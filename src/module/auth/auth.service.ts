@@ -130,6 +130,14 @@ export class AuthService {
    */
   async refreshToken(rawRefreshToken: string): Promise<AccessTokenResponse> {
     const tokenHash = this.hashToken(rawRefreshToken);
+
+    // Revoke first, atomically: two parallel rotations of the same token
+    // can't both pass a read-then-write check and mint two sessions.
+    const { count } = await this.refreshTokenRepository.revokeIfActive(
+      tokenHash,
+      new Date(),
+    );
+
     const storedToken =
       await this.refreshTokenRepository.findByTokenHash(tokenHash);
 
@@ -139,14 +147,11 @@ export class AuthService {
       );
     }
 
-    if (storedToken.revokedAt) {
-      await this.refreshTokenRepository.revokeAllForUser(storedToken.userId);
-      throw new UnauthorizedException(
-        translate('exception.invalidRefreshToken'),
-      );
-    }
-
-    if (storedToken.expiresAt < new Date()) {
+    if (count === 0) {
+      // Already revoked = reuse/theft; otherwise it simply expired.
+      if (storedToken.revokedAt) {
+        await this.refreshTokenRepository.revokeAllForUser(storedToken.userId);
+      }
       throw new UnauthorizedException(
         translate('exception.invalidRefreshToken'),
       );

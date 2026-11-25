@@ -41,6 +41,7 @@ describe('AuthService', () => {
     create: jest.Mock;
     findByTokenHash: jest.Mock;
     revoke: jest.Mock;
+    revokeIfActive: jest.Mock;
     revokeAllForUser: jest.Mock;
   };
 
@@ -81,6 +82,7 @@ describe('AuthService', () => {
       create: jest.fn(),
       findByTokenHash: jest.fn(),
       revoke: jest.fn(),
+      revokeIfActive: jest.fn().mockResolvedValue({ count: 0 }),
       revokeAllForUser: jest.fn(),
     };
 
@@ -610,8 +612,10 @@ describe('AuthService', () => {
         expiresAt: new Date(Date.now() + 1000 * 60 * 60),
         revokedAt: null,
       });
+      refreshTokenRepository.revokeIfActive.mockResolvedValue({ count: 1 });
       userService.findById.mockResolvedValue(activeUser);
       jwtService.sign.mockReturnValue('new-access-token');
+
       refreshTokenRepository.create.mockResolvedValue({});
       refreshTokenRepository.revoke.mockResolvedValue({});
 
