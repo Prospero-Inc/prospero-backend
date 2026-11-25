@@ -134,8 +134,7 @@ through its PostgREST API. Every migration that creates a table must also run
   (`verifyDelta`, ±1 step) and `UserService.consumeTotpStep` stores it in
   `User.twoFALastUsedStep` atomically; a step not newer than the stored one is rejected.
 - **salary** (income) — `POST /salary` (create), `PATCH /salary/:id` (edit date/amount/type,
-  ownership-checked), `GET /salary/details` (current calendar-month view, spec §3.3), `GET
-  /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
+  ownership-checked), `GET /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
   Distribution uses the **Strategy pattern** (`strategies/salary-distribution.strategy.ts`
   interface, `custom.strategy.ts` the only implementation now — `fifty-thirty-twenty.strategy.ts`
   was removed as redundant once `CustomStrategy` is always built from the user's own

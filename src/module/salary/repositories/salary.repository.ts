@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/module/prisma.service';
-import { endOfMonth, startOfMonth } from 'date-fns';
 import {
   IncomeReviewStatus,
   IncomeType,
@@ -154,32 +153,5 @@ export class SalaryRepository {
 
   delete(id: number) {
     return this.prisma.salary.delete({ where: { id } });
-  }
-
-  async getUserSalaryDetails(userId: number) {
-    const now = new Date();
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        username: true,
-        salary: {
-          where: {
-            date: {
-              gte: startOfMonth(now),
-              lte: endOfMonth(now),
-            },
-          },
-          select: {
-            amount: true,
-            date: true,
-            type: true,
-            budgetCategory: true,
-            distributeAutomatically: true,
-          },
-          orderBy: { date: 'asc' },
-        },
-      },
-    });
-    return user;
   }
 }

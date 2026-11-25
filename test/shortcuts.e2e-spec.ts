@@ -380,6 +380,11 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
         .expect(200);
     });
 
+    it('no longer serves GET /salary/details (unused, calendar-month view)', async () => {
+      const { accessToken } = await createUser('salary-details');
+      await asUser(accessToken).get('/api/salary/details').expect(404);
+    });
+
     it('answers a readable 400 for an invalid amount', async () => {
       const { token } = await createUser('bad');
 
