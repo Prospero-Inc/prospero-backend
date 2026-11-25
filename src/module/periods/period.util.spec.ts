@@ -5,6 +5,7 @@ import {
   estimateNextPaymentDate,
   findPeriodByKey,
   INITIAL_PERIOD_KEY,
+  periodDateRange,
   periodKey,
   resolvePeriodForDate,
   resolveTransactionPeriod,
@@ -219,5 +220,31 @@ describe('assignToPeriods', () => {
 
     expect(buckets.map((rows) => rows.length)).toEqual([1, 1, 1]);
     expect(buckets[2][0].date).toEqual(d('2026-09-01'));
+  });
+});
+
+describe('periodDateRange', () => {
+  const periods = computePeriods([d('2026-09-13'), d('2026-09-27')]);
+
+  it('bounds a closed period through the last millisecond of its end day', () => {
+    expect(periodDateRange(periods[1])).toEqual({
+      from: d('2026-09-13'),
+      to: new Date('2026-09-26T23:59:59.999Z'),
+    });
+  });
+
+  it('leaves the open side of the initial and the open period unbounded', () => {
+    expect(periodDateRange(periods[0])).toEqual({
+      from: undefined,
+      to: new Date('2026-09-12T23:59:59.999Z'),
+    });
+    expect(periodDateRange(periods[2])).toEqual({
+      from: d('2026-09-27'),
+      to: undefined,
+    });
+    expect(periodDateRange(computePeriods([])[0])).toEqual({
+      from: undefined,
+      to: undefined,
+    });
   });
 });

@@ -11,6 +11,18 @@ export function resolveLocalDate(now: Date, timeZone: string): Date {
   return new Date(`${local}T00:00:00.000Z`);
 }
 
+/** First and last instant of a calendar month (`monthIndex` 0–11) in UTC,
+ * for `date` range filters on rows stored at UTC midnight. */
+export function utcMonthRange(
+  year: number,
+  monthIndex: number,
+): { from: Date; to: Date } {
+  return {
+    from: new Date(Date.UTC(year, monthIndex, 1)),
+    to: new Date(Date.UTC(year, monthIndex + 1, 1) - 1),
+  };
+}
+
 /** Whole days from `earlier` to `later`, both UTC-midnight dates. Unlike
  * date-fns' differenceInCalendarDays it doesn't read the process timezone. */
 export function differenceInUTCDays(later: Date, earlier: Date): number {

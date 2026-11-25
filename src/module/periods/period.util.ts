@@ -143,6 +143,25 @@ export function resolveTransactionPeriod(
   return natural;
 }
 
+/**
+ * `date` bounds of the rows a period can hold by date (`undefined` = open
+ * side), for narrowing a read before `assignToPeriods`. Rows with a
+ * `periodOverride` can land outside their date's period, so a transactions
+ * read must also include those regardless of date.
+ */
+export function periodDateRange(period: ComputedPeriod): {
+  from?: Date;
+  to?: Date;
+} {
+  return {
+    from: period.startDate ?? undefined,
+    // Through the last millisecond of endDate: Gmail rows carry a time.
+    to: period.endDate
+      ? new Date(addUTCDays(period.endDate, 1).getTime() - 1)
+      : undefined,
+  };
+}
+
 /** Index of the last period whose start is on or before `day` (ms at UTC
  * midnight). `starts` is ascending, with -Infinity for the initial period. */
 function lastStartOnOrBefore(starts: number[], day: number): number {

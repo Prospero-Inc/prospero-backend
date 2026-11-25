@@ -12,6 +12,13 @@ import {
   resolveOccurrenceDate,
   resolveReferenceDate,
 } from '../occurrence.util';
+import { utcMonthRange } from 'src/lib/dates/local-date';
+
+/** Occurrences are always in `date`'s UTC month (see resolveOccurrenceDate),
+ * so that month's payments are all a cycle check needs. */
+function occurrenceMonth(date: Date) {
+  return utcMonthRange(date.getUTCFullYear(), date.getUTCMonth());
+}
 
 @Injectable()
 export class FixedExpensesService {
@@ -40,11 +47,9 @@ export class FixedExpensesService {
   /** A fixed expense's cycle is the calendar month of its occurrence, not a
    * payroll period: the last period is open-ended, so every future occurrence
    * falls in it, next to the payments already made in it. */
-  private findPaymentForOccurrence(
-    transactions: Transaction[],
-    fixedExpenseId: number,
-    occurrenceDate: Date,
-  ) {
+  private findPaymentForOccurrence<
+    T extends Pick<Transaction, 'fixedExpenseId' | 'date'>,
+  >(transactions: T[], fixedExpenseId: number, occurrenceDate: Date) {
     return transactions.find(
       (transaction) =>
         transaction.fixedExpenseId === fixedExpenseId &&
@@ -55,11 +60,12 @@ export class FixedExpensesService {
 
   /** `localToday`: the user's date (YYYY-MM-DD), see resolveReferenceDate. */
   async findAllForUser(userId: number, localToday?: string) {
+    const today = resolveReferenceDate(localToday, new Date());
+    const { from, to } = occurrenceMonth(today);
     const [fixedExpenses, transactions] = await Promise.all([
       this.fixedExpensesRepository.findManyByUser(userId),
-      this.transactionsService.findAllForUser(userId),
+      this.transactionsService.findFixedExpensePayments(userId, from, to),
     ]);
-    const today = resolveReferenceDate(localToday, new Date());
 
     return fixedExpenses.map((fixedExpense) => {
       const paidThisCycle = Boolean(
@@ -98,7 +104,9 @@ export class FixedExpensesService {
     fixedExpenses: FixedExpense[],
     date: Date,
   ) {
-    const transactions = await this.transactionsService.findAllForUser(userId);
+    const { from, to } = occurrenceMonth(date);
+    const transactions =
+      await this.transactionsService.findFixedExpensePayments(userId, from, to);
     return fixedExpenses.filter(
       ({ id }) => !this.findPaymentForOccurrence(transactions, id, date),
     );
@@ -120,10 +128,15 @@ export class FixedExpensesService {
 
   async pay(id: number, userId: number, localToday?: string) {
     const fixedExpense = await this.findOwnedOrThrow(id, userId);
-    const transactions = await this.transactionsService.findAllForUser(userId);
     const occurrenceDate = resolveOccurrenceDate(
       fixedExpense.dueDate,
       resolveReferenceDate(localToday, new Date()),
+    );
+    // Full rows (not findFixedExpensePayments): the 409 body returns the
+    // existing payment as-is.
+    const transactions = await this.transactionsService.findAllForUser(
+      userId,
+      occurrenceMonth(occurrenceDate),
     );
 
     const existing = this.findPaymentForOccurrence(

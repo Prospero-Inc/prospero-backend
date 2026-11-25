@@ -69,7 +69,11 @@ describe('PeriodsService movement lists', () => {
 
   beforeEach(() => {
     const salaryService = {
-      findAllForUser: jest.fn().mockResolvedValue(salaries),
+      findPayrollDates: jest
+        .fn()
+        .mockResolvedValue(
+          salaries.filter((s) => s.type === IncomeType.Payroll),
+        ),
       findAllForUserWithPossibleDuplicates: jest
         .fn()
         .mockResolvedValue(salaries),
@@ -243,6 +247,11 @@ describe('PeriodsService period summaries', () => {
     const userService = { findById: jest.fn().mockResolvedValue(user) };
     const salaryService = {
       findAllForUser: jest.fn().mockResolvedValue(rows.salaries),
+      findPayrollDates: jest
+        .fn()
+        .mockResolvedValue(
+          rows.salaries.filter((s) => s.type === IncomeType.Payroll),
+        ),
     };
     const transactionsService = {
       findAllForUser: jest.fn().mockResolvedValue(rows.transactions),
@@ -410,6 +419,12 @@ describe('PeriodsService period summaries', () => {
  * process timezone (run under TZ=America/El_Salvador and TZ=UTC). */
 describe('PeriodsService day counts', () => {
   function serviceWithPaydays(...dates: string[]) {
+    const payrolls = dates.map((date, id) => ({
+      id,
+      date: d(date),
+      amount: 500,
+      type: IncomeType.Payroll,
+    }));
     return new PeriodsService(
       {
         findById: jest.fn().mockResolvedValue({
@@ -420,14 +435,8 @@ describe('PeriodsService day counts', () => {
         }),
       } as any,
       {
-        findAllForUser: jest.fn().mockResolvedValue(
-          dates.map((date, id) => ({
-            id,
-            date: d(date),
-            amount: 500,
-            type: IncomeType.Payroll,
-          })),
-        ),
+        findAllForUser: jest.fn().mockResolvedValue(payrolls),
+        findPayrollDates: jest.fn().mockResolvedValue(payrolls),
       } as any,
       { findAllForUser: jest.fn().mockResolvedValue([]) } as any,
     );
@@ -455,4 +464,82 @@ describe('PeriodsService day counts', () => {
       expect(previous.daysElapsed).toBe(16 + elapsed);
     },
   );
+});
+
+/** plan-rendimiento B2: each read is narrowed to what the response needs. */
+describe('PeriodsService narrowed reads', () => {
+  const payrolls = [
+    { id: 1, type: IncomeType.Payroll, amount: 500, date: d('2026-10-15') },
+    { id: 2, type: IncomeType.Payroll, amount: 500, date: d('2026-10-31') },
+  ];
+  let salaryService: Record<string, jest.Mock>;
+  let transactionsService: Record<string, jest.Mock>;
+  let service: PeriodsService;
+
+  beforeEach(() => {
+    salaryService = {
+      findPayrollDates: jest.fn().mockResolvedValue(payrolls),
+      findAllForUser: jest.fn().mockResolvedValue(payrolls),
+      findAllForUserWithPossibleDuplicates: jest
+        .fn()
+        .mockResolvedValue(payrolls),
+    };
+    transactionsService = {
+      findAllForUser: jest.fn().mockResolvedValue([]),
+      findAllForUserWithPossibleDuplicates: jest.fn().mockResolvedValue([]),
+    };
+    service = new PeriodsService(
+      {
+        findById: jest.fn().mockResolvedValue({
+          needsPercent: 0.5,
+          wantsPercent: 0.3,
+          savingsPercent: 0.2,
+          payFrequency: PayFrequency.Biweekly,
+        }),
+      } as any,
+      salaryService as any,
+      transactionsService as any,
+    );
+  });
+
+  it('reads the open period by date plus every overridden transaction', async () => {
+    await service.getCurrentPeriodSummary(5);
+
+    expect(salaryService.findAllForUser).toHaveBeenCalledWith(5, {
+      from: d('2026-10-31'),
+      to: undefined,
+    });
+    expect(transactionsService.findAllForUser).toHaveBeenCalledWith(5, {
+      from: d('2026-10-31'),
+      to: undefined,
+      includeOverridden: true,
+    });
+  });
+
+  it('reads a closed period through the end of its last day', async () => {
+    await service.listTransactionsForPeriod(5, '2026-10-15');
+    await service.listSalariesForPeriod(5, '2026-10-15');
+
+    const range = {
+      from: d('2026-10-15'),
+      to: new Date('2026-10-30T23:59:59.999Z'),
+    };
+    expect(
+      transactionsService.findAllForUserWithPossibleDuplicates,
+    ).toHaveBeenCalledWith(5, { ...range, includeOverridden: true });
+    expect(
+      salaryService.findAllForUserWithPossibleDuplicates,
+    ).toHaveBeenCalledWith(5, range);
+  });
+
+  it('reads only the calendar month for the month summary', async () => {
+    await service.getMonthSummary(5, new Date(2026, 9, 24, 12, 0, 0));
+
+    const range = {
+      from: d('2026-10-01'),
+      to: new Date('2026-10-31T23:59:59.999Z'),
+    };
+    expect(salaryService.findAllForUser).toHaveBeenCalledWith(5, range);
+    expect(transactionsService.findAllForUser).toHaveBeenCalledWith(5, range);
+  });
 });

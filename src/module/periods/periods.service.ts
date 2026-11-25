@@ -4,6 +4,7 @@ import {
   APP_TIME_ZONE,
   differenceInUTCDays,
   resolveLocalDate,
+  utcMonthRange,
 } from 'src/lib/dates/local-date';
 import { UserService } from '../user/user.service';
 import {
@@ -21,6 +22,7 @@ import {
   computePeriods,
   estimateNextPaymentDate,
   findPeriodByKey,
+  periodDateRange,
   periodKey,
 } from './period.util';
 import {
@@ -75,19 +77,23 @@ export class PeriodsService {
     private readonly transactionsService: TransactionsService,
   ) {}
 
-  private async loadContext(userId: number) {
-    const [user, salaries, transactions] = await Promise.all([
-      this.userService.findById(userId),
-      this.salaryService.findAllForUser(userId),
-      this.transactionsService.findAllForUser(userId),
-    ]);
+  /** Periods from the Payroll dates alone — no need to read every row. */
+  private async loadPeriods(userId: number): Promise<ComputedPeriod[]> {
+    const payrolls = await this.salaryService.findPayrollDates(userId);
+    return computePeriods(payrolls.map(({ date }) => date));
+  }
 
-    return {
-      user,
-      salaries,
-      transactions,
-      periods: this.computeUserPeriods(salaries),
-    };
+  /** Only the rows that can count toward `period`: by date, plus every
+   * overridden transaction. `assignToPeriods` still has the final say. */
+  private loadPeriodRows(userId: number, period: ComputedPeriod) {
+    const range = periodDateRange(period);
+    return Promise.all([
+      this.salaryService.findAllForUser(userId, range),
+      this.transactionsService.findAllForUser(userId, {
+        ...range,
+        includeOverridden: true,
+      }),
+    ]);
   }
 
   private computeUserPeriods(salaries: Salary[]): ComputedPeriod[] {
@@ -197,14 +203,17 @@ export class PeriodsService {
   }
 
   async getCurrentPeriodSummary(userId: number): Promise<PeriodSummary> {
-    const { user, salaries, transactions, periods } =
-      await this.loadContext(userId);
+    const [user, periods] = await Promise.all([
+      this.userService.findById(userId),
+      this.loadPeriods(userId),
+    ]);
     const strategy = new CustomStrategy(
       user.needsPercent,
       user.wantsPercent,
       user.savingsPercent,
     );
     const current = periods[periods.length - 1];
+    const [salaries, transactions] = await this.loadPeriodRows(userId, current);
 
     return this.summarizePeriod(
       current,
@@ -216,8 +225,13 @@ export class PeriodsService {
   }
 
   async listPeriods(userId: number): Promise<PeriodSummary[]> {
-    const { user, salaries, transactions, periods } =
-      await this.loadContext(userId);
+    // Every period's totals need every row: the whole history is read here.
+    const [user, salaries, transactions] = await Promise.all([
+      this.userService.findById(userId),
+      this.salaryService.findAllForUser(userId),
+      this.transactionsService.findAllForUser(userId),
+    ]);
+    const periods = this.computeUserPeriods(salaries);
     const strategy = new CustomStrategy(
       user.needsPercent,
       user.wantsPercent,
@@ -246,12 +260,13 @@ export class PeriodsService {
     userId: number,
     key?: string,
   ): Promise<TransactionWithPossibleDuplicate[]> {
-    const [salaries, transactions] = await Promise.all([
-      this.salaryService.findAllForUser(userId),
-      this.transactionsService.findAllForUserWithPossibleDuplicates(userId),
-    ]);
-    const periods = this.computeUserPeriods(salaries);
+    const periods = await this.loadPeriods(userId);
     const target = this.selectPeriod(periods, key);
+    const transactions =
+      await this.transactionsService.findAllForUserWithPossibleDuplicates(
+        userId,
+        { ...periodDateRange(target), includeOverridden: true },
+      );
 
     return assignToPeriods(periods, transactions)[target.index];
   }
@@ -261,10 +276,13 @@ export class PeriodsService {
     userId: number,
     key?: string,
   ): Promise<SalaryWithPossibleDuplicate[]> {
-    const salaries =
-      await this.salaryService.findAllForUserWithPossibleDuplicates(userId);
-    const periods = this.computeUserPeriods(salaries);
+    const periods = await this.loadPeriods(userId);
     const target = this.selectPeriod(periods, key);
+    const salaries =
+      await this.salaryService.findAllForUserWithPossibleDuplicates(
+        userId,
+        periodDateRange(target),
+      );
 
     return assignToPeriods(periods, salaries)[target.index];
   }
@@ -279,12 +297,13 @@ export class PeriodsService {
     userId: number,
     now: Date = new Date(),
   ): Promise<MonthSummary> {
-    const [salaries, transactions] = await Promise.all([
-      this.salaryService.findAllForUser(userId),
-      this.transactionsService.findAllForUser(userId),
-    ]);
     const year = now.getFullYear();
     const monthIndex = now.getMonth();
+    const range = utcMonthRange(year, monthIndex);
+    const [salaries, transactions] = await Promise.all([
+      this.salaryService.findAllForUser(userId, range),
+      this.transactionsService.findAllForUser(userId, range),
+    ]);
 
     const monthSalaries = salaries.filter((salary) =>
       isInMonth(salary.date, year, monthIndex),
