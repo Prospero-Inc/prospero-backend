@@ -143,6 +143,53 @@ export function resolveTransactionPeriod(
   return natural;
 }
 
+/** Index of the last period whose start is on or before `day` (ms at UTC
+ * midnight). `starts` is ascending, with -Infinity for the initial period. */
+function lastStartOnOrBefore(starts: number[], day: number): number {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= day) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
+ * Groups `rows` by the period each one belongs to — `result[period.index]` —
+ * with the same rules as `resolveTransactionPeriod` (and `resolvePeriodForDate`
+ * for rows without `periodOverride`, like incomes), but with a binary search
+ * over the period starts: O(R log P) instead of O(R·P) per period. Expects
+ * `periods` as built by `computePeriods`, and keeps each bucket in `rows`
+ * order.
+ */
+export function assignToPeriods<
+  T extends { date: Date; periodOverride?: PeriodOverride | null },
+>(periods: ComputedPeriod[], rows: T[]): T[][] {
+  const starts = periods.map(
+    (period) => period.startDate?.getTime() ?? -Infinity,
+  );
+  const buckets = periods.map((): T[] => []);
+  const last = periods.length - 1;
+
+  for (const row of rows) {
+    const natural = lastStartOnOrBefore(
+      starts,
+      startOfUTCDay(row.date).getTime(),
+    );
+    const index =
+      row.periodOverride === PeriodOverride.Current
+        ? last
+        : row.periodOverride === PeriodOverride.Previous
+          ? Math.max(0, natural - 1)
+          : natural;
+    buckets[index].push(row);
+  }
+
+  return buckets;
+}
+
 /**
  * Rough, informational-only estimate of the next payment date. Per spec,
  * this never affects which period a transaction belongs to — only the

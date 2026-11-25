@@ -12,13 +12,12 @@ import {
 } from '../transactions/services/transactions.service';
 import { CustomStrategy } from '../salary/strategies/custom.strategy';
 import {
+  assignToPeriods,
   ComputedPeriod,
   computePeriods,
   estimateNextPaymentDate,
   findPeriodByKey,
   periodKey,
-  resolvePeriodForDate,
-  resolveTransactionPeriod,
 } from './period.util';
 import {
   CATEGORY_TO_BUDGET_KEY,
@@ -107,27 +106,15 @@ export class PeriodsService {
     return period;
   }
 
+  /** `periodIncomes`/`periodTransactions`: the rows already assigned to
+   * `period` (see `assignToPeriods`). */
   private summarizePeriod(
     period: ComputedPeriod,
-    periods: ComputedPeriod[],
-    salaries: Salary[],
-    transactions: Transaction[],
+    periodIncomes: Salary[],
+    periodTransactions: Transaction[],
     strategy: CustomStrategy,
     frequency: Parameters<typeof estimateNextPaymentDate>[1],
   ): PeriodSummary {
-    const periodIncomes = salaries.filter(
-      (salary) =>
-        resolvePeriodForDate(periods, salary.date).index === period.index,
-    );
-    const periodTransactions = transactions.filter(
-      (transaction) =>
-        resolveTransactionPeriod(
-          periods,
-          transaction.date,
-          transaction.periodOverride,
-        ).index === period.index,
-    );
-
     const income = periodIncomes.reduce(
       (sum, salary) => sum + salary.amount,
       0,
@@ -214,9 +201,8 @@ export class PeriodsService {
 
     return this.summarizePeriod(
       current,
-      periods,
-      salaries,
-      transactions,
+      assignToPeriods(periods, salaries)[current.index],
+      assignToPeriods(periods, transactions)[current.index],
       strategy,
       user.payFrequency,
     );
@@ -230,15 +216,16 @@ export class PeriodsService {
       user.wantsPercent,
       user.savingsPercent,
     );
+    const incomesByPeriod = assignToPeriods(periods, salaries);
+    const transactionsByPeriod = assignToPeriods(periods, transactions);
 
     return [...periods]
       .reverse()
       .map((period) =>
         this.summarizePeriod(
           period,
-          periods,
-          salaries,
-          transactions,
+          incomesByPeriod[period.index],
+          transactionsByPeriod[period.index],
           strategy,
           user.payFrequency,
         ),
@@ -259,14 +246,7 @@ export class PeriodsService {
     const periods = this.computeUserPeriods(salaries);
     const target = this.selectPeriod(periods, key);
 
-    return transactions.filter(
-      (transaction) =>
-        resolveTransactionPeriod(
-          periods,
-          transaction.date,
-          transaction.periodOverride,
-        ).index === target.index,
-    );
+    return assignToPeriods(periods, transactions)[target.index];
   }
 
   /** Same rows (and shape) as `GET /salary`, limited to the given period. */
@@ -279,10 +259,7 @@ export class PeriodsService {
     const periods = this.computeUserPeriods(salaries);
     const target = this.selectPeriod(periods, key);
 
-    return salaries.filter(
-      (salary) =>
-        resolvePeriodForDate(periods, salary.date).index === target.index,
-    );
+    return assignToPeriods(periods, salaries)[target.index];
   }
 
   /**

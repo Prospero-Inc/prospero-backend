@@ -1,5 +1,6 @@
 import { PayFrequency, PeriodOverride } from '@prisma/client';
 import {
+  assignToPeriods,
   computePeriods,
   estimateNextPaymentDate,
   findPeriodByKey,
@@ -135,5 +136,88 @@ describe('periodKey / findPeriodByKey', () => {
     expect(findPeriodByKey(periods, '2026-09-14')?.index).toBe(1);
     expect(findPeriodByKey(periods, INITIAL_PERIOD_KEY)?.index).toBe(0);
     expect(findPeriodByKey(periods, '2026-09-15')).toBeUndefined();
+  });
+});
+
+describe('assignToPeriods', () => {
+  /** Seeded PRNG (mulberry32), so a failure is reproducible. */
+  function random(seed: number) {
+    return () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /** The reference: what `resolveTransactionPeriod` assigns, row by row. */
+  function naive(
+    periods: ReturnType<typeof computePeriods>,
+    rows: { date: Date; periodOverride?: PeriodOverride | null }[],
+  ) {
+    return periods.map((period) =>
+      rows.filter(
+        (row) =>
+          resolveTransactionPeriod(periods, row.date, row.periodOverride)
+            .index === period.index,
+      ),
+    );
+  }
+
+  const base = d('2025-01-01').getTime();
+  const DAY = 86_400_000;
+  const overrides = [
+    null,
+    undefined,
+    PeriodOverride.Previous,
+    PeriodOverride.Current,
+  ];
+
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
+    'matches resolveTransactionPeriod on random data (seed %i)',
+    (seed) => {
+      const rand = random(seed);
+      const payrollCount = Math.floor(rand() * 30); // 0 → no-payroll user
+      // Random times of day, unsorted, with repeated paydays now and then.
+      const payrolls = Array.from(
+        { length: payrollCount },
+        () => new Date(base + Math.floor(rand() * 400) * DAY + rand() * DAY),
+      );
+      if (payrollCount > 1) payrolls.push(new Date(payrolls[0].getTime()));
+      const periods = computePeriods(payrolls);
+      const rows = Array.from({ length: 500 }, (_, id) => ({
+        id,
+        // Also before the first and after the last payday.
+        date: new Date(
+          base + Math.floor(rand() * 460 - 30) * DAY + rand() * DAY,
+        ),
+        periodOverride: overrides[Math.floor(rand() * overrides.length)],
+      }));
+
+      expect(assignToPeriods(periods, rows)).toEqual(naive(periods, rows));
+    },
+  );
+
+  it('puts a row on a payday in the period that payday opens', () => {
+    const periods = computePeriods([d('2026-09-13'), d('2026-09-27')]);
+    const buckets = assignToPeriods(periods, [
+      { date: d('2026-09-12') },
+      { date: new Date('2026-09-13T23:59:00.000Z') },
+      { date: d('2026-09-27') },
+    ]);
+
+    expect(buckets.map((rows) => rows.length)).toEqual([1, 1, 1]);
+  });
+
+  it('applies overrides like resolveTransactionPeriod', () => {
+    const periods = computePeriods([d('2026-09-13'), d('2026-09-27')]);
+    const buckets = assignToPeriods(periods, [
+      { date: d('2026-09-01'), periodOverride: PeriodOverride.Previous },
+      { date: d('2026-09-28'), periodOverride: PeriodOverride.Previous },
+      { date: d('2026-09-01'), periodOverride: PeriodOverride.Current },
+    ]);
+
+    expect(buckets.map((rows) => rows.length)).toEqual([1, 1, 1]);
+    expect(buckets[2][0].date).toEqual(d('2026-09-01'));
   });
 });
