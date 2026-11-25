@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { BudgetCategory } from '@prisma/client';
+import { BudgetCategory, Prisma } from '@prisma/client';
 import { FixedExpensesService } from './fixed-expenses.service';
 import { FixedExpensesRepository } from '../repositories/fixed-expenses.repository';
 import { TransactionsService } from '../../transactions/services/transactions.service';
@@ -16,7 +16,11 @@ describe('FixedExpensesService', () => {
     update: jest.Mock;
     delete: jest.Mock;
   };
-  let transactionsService: { findAllForUser: jest.Mock; create: jest.Mock };
+  let transactionsService: {
+    findAllForUser: jest.Mock;
+    findFixedExpensePayments: jest.Mock;
+    create: jest.Mock;
+  };
 
   beforeEach(async () => {
     repository = {
@@ -28,6 +32,7 @@ describe('FixedExpensesService', () => {
     };
     transactionsService = {
       findAllForUser: jest.fn().mockResolvedValue([]),
+      findFixedExpensePayments: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
     };
 
@@ -105,7 +110,7 @@ describe('FixedExpensesService', () => {
       repository.findManyByUser.mockResolvedValue([appleMusic, claudeCode]);
       // Apple Music's Sep-9 occurrence was already paid; Claude Code's
       // Sep-18 occurrence was not.
-      transactionsService.findAllForUser.mockResolvedValue([
+      transactionsService.findFixedExpensePayments.mockResolvedValue([
         {
           id: 99,
           userId: 5,
@@ -119,6 +124,12 @@ describe('FixedExpensesService', () => {
 
       const result = await service.findAllForUser(5);
 
+      // Only this month's fixed-expense payments are read.
+      expect(transactionsService.findFixedExpensePayments).toHaveBeenCalledWith(
+        5,
+        d('2026-09-01'),
+        new Date('2026-09-30T23:59:59.999Z'),
+      );
       expect(result.find((fe) => fe.id === 1)?.paidThisCycle).toBe(true);
       expect(result.find((fe) => fe.id === 2)?.paidThisCycle).toBe(false);
     });
@@ -139,7 +150,7 @@ describe('FixedExpensesService', () => {
           description: null,
         },
       ]);
-      transactionsService.findAllForUser.mockResolvedValue([
+      transactionsService.findFixedExpensePayments.mockResolvedValue([
         {
           id: 99,
           userId: 5,
@@ -184,7 +195,7 @@ describe('FixedExpensesService', () => {
       });
 
       it("doesn't count October's payment for November's occurrence", async () => {
-        transactionsService.findAllForUser.mockResolvedValue([
+        transactionsService.findFixedExpensePayments.mockResolvedValue([
           payment('2026-10-30'),
         ]);
 
@@ -194,7 +205,7 @@ describe('FixedExpensesService', () => {
       });
 
       it("counts a payment dated in November's occurrence month", async () => {
-        transactionsService.findAllForUser.mockResolvedValue([
+        transactionsService.findFixedExpensePayments.mockResolvedValue([
           payment('2026-11-30'),
         ]);
 
@@ -231,6 +242,10 @@ describe('FixedExpensesService', () => {
       // "today" is faked to 2026-09-20, but the due day is the 9th.
       await service.pay(1, 5);
 
+      expect(transactionsService.findAllForUser).toHaveBeenCalledWith(5, {
+        from: d('2026-09-01'),
+        to: new Date('2026-09-30T23:59:59.999Z'),
+      });
       expect(transactionsService.create).toHaveBeenCalledWith(5, {
         amount: 15,
         date: d('2026-09-09'),
@@ -268,6 +283,29 @@ describe('FixedExpensesService', () => {
 
       await expect(service.pay(1, 5)).rejects.toBeInstanceOf(ConflictException);
       expect(transactionsService.create).not.toHaveBeenCalled();
+    });
+
+    it('answers the same 409 when a concurrent pay wins the unique index', async () => {
+      repository.findOneOwned.mockResolvedValue(fixedExpense);
+      const existing = { id: 99, fixedExpenseId: 1, date: d('2026-09-09') };
+      // Empty on the first check; the concurrent payment exists afterwards.
+      transactionsService.findAllForUser
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([existing]);
+      transactionsService.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      const error = await service.pay(1, 5).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toEqual({
+        message: 'This fixed expense was already paid for the current cycle',
+        transaction: existing,
+      });
     });
 
     it("isn't blocked by last month's payment and dates the new one this month", async () => {

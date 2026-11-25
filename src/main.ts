@@ -8,6 +8,9 @@ import { configureApp } from './app.setup';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   configureApp(app);
+  // On SIGTERM (deploy), close the server and run onModuleDestroy hooks
+  // (Prisma $disconnect) instead of dying mid-request.
+  app.enableShutdownHooks();
 
   // Configurar archivos estáticos
   app.useStaticAssets(join(__dirname, '..', 'public'));

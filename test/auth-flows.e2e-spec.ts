@@ -180,6 +180,21 @@ describe('Auth flows (e2e, Postgres)', () => {
         .expect(401);
     });
 
+    it('gives a new pair to only one of two parallel refreshes of the same token', async () => {
+      const email = await createActiveUser('refresh-race');
+      const { body: session } = await login(email).expect(201);
+
+      const results = await Promise.all(
+        [1, 2].map(() =>
+          post('/api/auth/refresh').send({
+            refreshToken: session.refreshToken,
+          }),
+        ),
+      );
+
+      expect(results.map((r) => r.status).sort()).toEqual([201, 401]);
+    });
+
     it('signs every device out with logout-all', async () => {
       const email = await createActiveUser('logout-all');
       const { body: phone } = await login(email).expect(201);

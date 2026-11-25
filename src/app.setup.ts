@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 import { TRUSTED_PROXIES } from './config/trust-proxy';
 import { buildCorsOrigins } from './config/cors';
+import { PrismaExceptionFilter } from './module/prisma-exception.filter';
 
 /**
  * HTTP-level setup shared by main.ts and the e2e suites, so tests exercise
@@ -26,6 +27,7 @@ export const configureApp = (app: INestApplication): void => {
     new I18nValidationExceptionFilter({
       detailedErrors: false,
     }),
+    new PrismaExceptionFilter(),
   );
 
   app.setGlobalPrefix('/api');

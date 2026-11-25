@@ -116,4 +116,12 @@ describe('GmailSyncScheduler', () => {
       2,
     );
   });
+
+  it("doesn't fire on the hour, when the 06:00 reminders cron runs", () => {
+    const { cronTime } = Reflect.getMetadata(
+      'SCHEDULE_CRON_OPTIONS',
+      GmailSyncScheduler.prototype.handleHourlySync,
+    );
+    expect(cronTime.split(' ')[0]).not.toBe('0');
+  });
 });

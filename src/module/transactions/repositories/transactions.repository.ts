@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   BudgetCategory,
   MovementSource,
+  Prisma,
   ProcessedEmailResult,
   Transaction,
   TransactionReviewStatus,
@@ -41,6 +42,9 @@ export interface TransactionFilters {
   from?: Date;
   to?: Date;
   reviewStatus?: TransactionReviewStatus[];
+  /** With `from`/`to`: also every row with a `periodOverride`, whatever its
+   * date, since it can count toward a period its date isn't in. */
+  includeOverridden?: boolean;
 }
 
 /** Raw shape of an unresolved `PossibleDuplicate` `ProcessedEmail` pointing
@@ -66,8 +70,12 @@ export class TransactionsRepository {
     });
   }
 
-  createFromGmail(userId: number, data: CreateGmailTransactionInput) {
-    return this.prisma.transaction.create({
+  createFromGmail(
+    userId: number,
+    data: CreateGmailTransactionInput,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
+    return client.transaction.create({
       data: {
         userId,
         amount: data.amount,
@@ -160,6 +168,22 @@ export class TransactionsRepository {
       }));
   }
 
+  /** `fixedExpenseId`/`date` of the fixed-expense payments in [from, to]. */
+  findFixedExpensePayments(
+    userId: number,
+    from: Date,
+    to: Date,
+  ): Promise<{ fixedExpenseId: number | null; date: Date }[]> {
+    return this.prisma.transaction.findMany({
+      where: {
+        userId,
+        fixedExpenseId: { not: null },
+        date: { gte: from, lte: to },
+      },
+      select: { fixedExpenseId: true, date: true },
+    });
+  }
+
   findManyByUser(userId: number, filters: TransactionFilters = {}) {
     return this.prisma.transaction.findMany({
       where: this.buildListWhere(userId, filters),
@@ -183,16 +207,25 @@ export class TransactionsRepository {
   }
 
   private buildListWhere(userId: number, filters: TransactionFilters) {
-    const { from, to, reviewStatus } = filters;
+    const { from, to, reviewStatus, includeOverridden } = filters;
+    const dateRange = (from || to) && {
+      date: {
+        ...(from && { gte: from }),
+        ...(to && { lte: to }),
+      },
+    };
 
     return {
       userId,
-      ...((from || to) && {
-        date: {
-          ...(from && { gte: from }),
-          ...(to && { lte: to }),
-        },
-      }),
+      ...(dateRange &&
+        (includeOverridden
+          ? {
+              OR: [
+                { ...dateRange, periodOverride: null },
+                { periodOverride: { not: null } },
+              ],
+            }
+          : dateRange)),
       ...(reviewStatus &&
         reviewStatus.length > 0 && {
           reviewStatus: { in: reviewStatus },

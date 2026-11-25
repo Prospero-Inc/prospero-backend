@@ -105,7 +105,8 @@ through its PostgREST API. Every migration that creates a table must also run
   sent to the client once and never stored. `POST /auth/refresh` (`RefreshTokenDto`, no
   `JwtAuthGuard` since the access token may already be expired) rotates on every call: it revokes
   the presented refresh token (`revokedAt` + `replacedByTokenHash`) and issues a brand new
-  access+refresh pair, so the client must always persist the newest refresh token. Presenting a
+  access+refresh pair (revocation first, a conditional `updateMany`, so of two parallel
+  refreshes with the same token only one gets a pair), so the client must always persist the newest refresh token. Presenting a
   refresh token that is already `revokedAt != null` is treated as reuse/theft and revokes *all* of
   that user's refresh tokens before responding 401. `POST /auth/logout` (`LogoutDto`, also no
   guard) revokes one token server-side and is idempotent (no error if it's unknown or already
@@ -134,8 +135,7 @@ through its PostgREST API. Every migration that creates a table must also run
   (`verifyDelta`, ±1 step) and `UserService.consumeTotpStep` stores it in
   `User.twoFALastUsedStep` atomically; a step not newer than the stored one is rejected.
 - **salary** (income) — `POST /salary` (create), `PATCH /salary/:id` (edit date/amount/type,
-  ownership-checked), `GET /salary/details` (current calendar-month view, spec §3.3), `GET
-  /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
+  ownership-checked), `GET /salary/distribute/preview` — all `JwtAuthGuard`-protected, scoped to `req.user.userId`.
   Distribution uses the **Strategy pattern** (`strategies/salary-distribution.strategy.ts`
   interface, `custom.strategy.ts` the only implementation now — `fifty-thirty-twenty.strategy.ts`
   was removed as redundant once `CustomStrategy` is always built from the user's own
@@ -148,13 +148,20 @@ through its PostgREST API. Every migration that creates a table must also run
   (`computePeriods`/`resolvePeriodForDate`/`resolveTransactionPeriod`/`estimateNextPaymentDate`,
   all pure functions, unit-tested in `period.util.spec.ts`). Because nothing is stored,
   editing/adding a payroll date automatically "moves" transactions between periods on the next
-  read — there's no explicit reassignment code anywhere. `PeriodsService.getCurrentPeriodSummary`
-  /`listPeriods` fetch a user's `Salary`+`Transaction` rows once and aggregate income/spend/budget
-  per period via `CustomStrategy`. `GET /periods/current` and `GET /periods` expose this.
+  read — there's no explicit reassignment code anywhere. Rows are grouped with
+  `assignToPeriods` (binary search over the period starts, same override rules as
+  `resolveTransactionPeriod`) — never filter rows once per period, that was O(P²·T).
+  `listPeriods` reads the whole history (it totals every period; `recentTransactions` only for the
+  open one); `/periods/current`, `/periods/transactions` and `/periods/salary` build the periods
+  from the Payroll dates alone and read only the target period's date range **plus every
+  transaction with a `periodOverride`** (`includeOverridden`), since an overridden row can count
+  toward a period its date isn't in. `/periods/month` reads only that month.
   **Timezone note:** all date math here uses hand-rolled UTC helpers, not `date-fns`'s
-  `startOfDay`/`addDays`/`addMonths` — those operate in the process's local timezone, which would
-  make period boundaries depend on server TZ. Don't reintroduce plain date-fns calls into this
-  file for date-only (no time-of-day) arithmetic.
+  `startOfDay`/`addDays`/`addMonths`/`differenceInCalendarDays` — those operate in the process's
+  local timezone, which would make period boundaries (and day counts) depend on server TZ. Don't
+  reintroduce plain date-fns calls into this file for date-only (no time-of-day) arithmetic.
+  "Today" for `daysElapsed`/`estimatedDaysRemaining` is `resolveLocalDate(now, APP_TIME_ZONE)`
+  from `src/lib/dates/local-date.ts`.
 - **transactions** — real CRUD: `TransactionsController` (`JwtAuthGuard` on the whole
   controller) exposes `POST/GET /transactions` and `PATCH/DELETE /transactions/:id`, backed by
   `TransactionsRepository` (Prisma) and `TransactionsService`. Every read/write is scoped to
@@ -179,7 +186,8 @@ through its PostgREST API. Every migration that creates a table must also run
   fall in it next to past payments). `pay()` uses this to find the current cycle's occurrence
   date, checks whether a `Transaction` with that `fixedExpenseId` is dated in the same UTC year
   and month (`ConflictException`/409 if so, to catch double-pay clicks), and otherwise creates
-  one dated at the occurrence — not at "today". `GET /fixed-expenses` reuses the identical
+  one dated at the occurrence — not at "today". A P2002 from a concurrent pay answers the same
+  409 body (only effective once a unique `(fixed_expense_id, date)` index exists, still pending). `GET /fixed-expenses` reuses the identical
   computation to annotate each item with `paidThisCycle: boolean`, so the frontend never
   reimplements occurrence logic. `FixedExpenseReminderScheduler` (daily, 6:00 a. m.
   `America/El_Salvador`, under the scheduler lock) sends one notification per user for the
@@ -255,6 +263,9 @@ through its PostgREST API. Every migration that creates a table must also run
   `VapidConfigService` disables push with one boot warning when missing/invalid.
 - **i18n** — `nestjs-i18n`, locale JSON under `src/i18n/{en,es}` for both validation and
   exception messages; Swagger operation summaries in the codebase are written in Spanish.
+- **errors** — `PrismaExceptionFilter` (`module/prisma-exception.filter.ts`, global, next to
+  the i18n validation filter) maps Prisma errors nobody handled: P2025 → 404, P2002 → 409,
+  anything else → logged 500. Explicit `HttpException`s keep their own bodies.
 
 ### Product spec vs. current implementation
 
@@ -291,8 +302,11 @@ still use the Float columns.**
 `SchedulerLockService.runExclusive(name, ttl, job)` (`module/scheduler-lock`): a lease row in
 `scheduler_locks` (atomic `INSERT … ON CONFLICT … WHERE locked_until < NOW()`), not a Postgres
 advisory lock — production uses a transaction-mode pooler where session locks don't hold. Jobs:
-Gmail sync (hourly, 3 accounts in parallel via `mapWithConcurrency`), refresh-token cleanup,
-money integrity.
+Gmail sync (hourly at minute 5, off the 06:00 reminders; 3 accounts in parallel via `mapWithConcurrency`), refresh-token cleanup,
+money integrity. Each Gmail connection's sync (cron or `POST /gmail-sync/sync-now`) also runs
+under a per-user lease `gmail-sync:user:<id>`, and a Gmail expense is created in one
+`$transaction` with its `ProcessedEmail` (the unique `(userId, gmailMessageId)` rolls a
+concurrent duplicate back).
 
 ### Health and deploy
 

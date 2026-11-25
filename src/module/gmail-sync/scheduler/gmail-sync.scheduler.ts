@@ -27,7 +27,9 @@ export class GmailSyncScheduler {
     private readonly schedulerLock: SchedulerLockService,
   ) {}
 
-  @Cron('0 * * * *')
+  // Minute 5, not 0: keeps it off the 06:00 reminders cron (and any other
+  // on-the-hour job) so they don't compete for the DB pool at once.
+  @Cron('5 * * * *')
   async handleHourlySync(): Promise<void> {
     await this.schedulerLock.runExclusive(
       'gmail-sync',

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/module/prisma.service';
-import { endOfMonth, startOfMonth } from 'date-fns';
 import {
   IncomeReviewStatus,
   IncomeType,
@@ -13,6 +12,8 @@ import { CreateGmailSalaryInput } from '../services/salary.service';
 
 export interface SalaryFilters {
   status?: IncomeReviewStatus[];
+  from?: Date;
+  to?: Date;
 }
 
 /** Raw shape of an unresolved `PossibleDuplicate` `ProcessedEmail` pointing
@@ -64,13 +65,17 @@ export class SalaryRepository {
   }
 
   findManyByUser(userId: number, filters: SalaryFilters = {}) {
-    const { status } = filters;
-
     return this.prisma.salary.findMany({
-      where: {
-        userId,
-        ...(status && status.length > 0 && { status: { in: status } }),
-      },
+      where: this.buildListWhere(userId, filters),
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  /** Just what periods are built from: the user's Payroll dates. */
+  findPayrollDatesByUser(userId: number): Promise<{ date: Date }[]> {
+    return this.prisma.salary.findMany({
+      where: { userId, type: IncomeType.Payroll },
+      select: { date: true },
       orderBy: { date: 'asc' },
     });
   }
@@ -79,16 +84,26 @@ export class SalaryRepository {
    * `periods`/`fixed-expenses` keep their ascending order), plus the bank
    * name for labeling. */
   findManyByUserWithLabels(userId: number, filters: SalaryFilters = {}) {
-    const { status } = filters;
-
     return this.prisma.salary.findMany({
-      where: {
-        userId,
-        ...(status && status.length > 0 && { status: { in: status } }),
-      },
+      where: this.buildListWhere(userId, filters),
       include: { institution: { select: { name: true } } },
       orderBy: { date: 'desc' },
     });
+  }
+
+  private buildListWhere(userId: number, filters: SalaryFilters) {
+    const { status, from, to } = filters;
+
+    return {
+      userId,
+      ...(status && status.length > 0 && { status: { in: status } }),
+      ...((from || to) && {
+        date: {
+          ...(from && { gte: from }),
+          ...(to && { lte: to }),
+        },
+      }),
+    };
   }
 
   /** See the type doc above — implemented for consistency, unreachable with
@@ -138,32 +153,5 @@ export class SalaryRepository {
 
   delete(id: number) {
     return this.prisma.salary.delete({ where: { id } });
-  }
-
-  async getUserSalaryDetails(userId: number) {
-    const now = new Date();
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        username: true,
-        salary: {
-          where: {
-            date: {
-              gte: startOfMonth(now),
-              lte: endOfMonth(now),
-            },
-          },
-          select: {
-            amount: true,
-            date: true,
-            type: true,
-            budgetCategory: true,
-            distributeAutomatically: true,
-          },
-          orderBy: { date: 'asc' },
-        },
-      },
-    });
-    return user;
   }
 }

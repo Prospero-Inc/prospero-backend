@@ -90,13 +90,8 @@ export class SalaryService {
       createSalaryDto,
     );
 
-    try {
-      await this.salaryRepository.create(userId, createSalaryDto);
-      return { message: 'Salario creado exitosamente' };
-    } catch (error) {
-      console.log(error);
-      throw new InternalServerErrorException('Error al crear el salario');
-    }
+    await this.salaryRepository.create(userId, createSalaryDto);
+    return { message: 'Salario creado exitosamente' };
   }
 
   /**
@@ -116,6 +111,10 @@ export class SalaryService {
 
   findAllForUser(userId: number, filters: SalaryFilters = {}) {
     return this.salaryRepository.findManyByUser(userId, filters);
+  }
+
+  findPayrollDates(userId: number) {
+    return this.salaryRepository.findPayrollDatesByUser(userId);
   }
 
   /** Used by `GET /salary` only — same split rationale as transactions'
@@ -223,16 +222,6 @@ export class SalaryService {
       };
     } catch {
       throw new InternalServerErrorException('Error al distribuir el salario');
-    }
-  }
-
-  async getUserSalaryDetails(userId: number) {
-    try {
-      return await this.salaryRepository.getUserSalaryDetails(userId);
-    } catch {
-      throw new InternalServerErrorException(
-        'Error al obtener los detalles del salario',
-      );
     }
   }
 }

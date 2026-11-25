@@ -13,6 +13,7 @@
     "forbidden": "¡Acceso al recurso solicitado está prohibido!",
     "userInactive": "¡El usuario está inactivo, por favor contacta a tu administrador para obtener ayuda!",
     "notFound": "¡Datos no encontrados!",
+    "conflict": "¡El registro ya existe!",
     "itemExpired": "{item} ha expirado!",
     "emailLooksGood": "¡El correo electrónico parece estar bien!",
     "unsupportedFileType": "¡El tipo de archivo subido no está soportado!",

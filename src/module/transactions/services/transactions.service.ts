@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   BudgetCategory,
   MovementSource,
+  Prisma,
   Transaction,
   TransactionReviewStatus,
 } from '@prisma/client';
@@ -111,11 +112,14 @@ export class TransactionsService {
 
   /** Called only by GmailSyncOrchestrator — creates a `source: Gmail`,
    * `reviewStatus: PendingReview` transaction with no category yet. */
+  /** `client` lets the Gmail sync create the row inside its own
+   * `$transaction`, together with the email's audit row. */
   createFromGmail(
     userId: number,
     data: CreateGmailTransactionInput,
+    client?: Prisma.TransactionClient,
   ): Promise<Transaction> {
-    return this.transactionsRepository.createFromGmail(userId, data);
+    return this.transactionsRepository.createFromGmail(userId, data, client);
   }
 
   /** Called only by ShortcutsService — creates a `source: Shortcut` row. */
@@ -159,6 +163,14 @@ export class TransactionsService {
 
   findAllForUser(userId: number, filters: TransactionFilters = {}) {
     return this.transactionsRepository.findManyByUser(userId, filters);
+  }
+
+  findFixedExpensePayments(userId: number, from: Date, to: Date) {
+    return this.transactionsRepository.findFixedExpensePayments(
+      userId,
+      from,
+      to,
+    );
   }
 
   /** Used by `GET /transactions` only — plain `findAllForUser` plus the

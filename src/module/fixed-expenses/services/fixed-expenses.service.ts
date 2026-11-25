@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FixedExpense, Transaction } from '@prisma/client';
+import { FixedExpense, Prisma, Transaction } from '@prisma/client';
 import { FixedExpensesRepository } from '../repositories/fixed-expenses.repository';
 import { CreateFixedExpenseDto } from '../dto/create-fixed-expense.dto';
 import { UpdateFixedExpenseDto } from '../dto/update-fixed-expense.dto';
@@ -12,6 +12,20 @@ import {
   resolveOccurrenceDate,
   resolveReferenceDate,
 } from '../occurrence.util';
+import { utcMonthRange } from 'src/lib/dates/local-date';
+
+/** Prisma's unique-constraint-violation error code. */
+const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
+
+const isUniqueViolation = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === UNIQUE_CONSTRAINT_VIOLATION;
+
+/** Occurrences are always in `date`'s UTC month (see resolveOccurrenceDate),
+ * so that month's payments are all a cycle check needs. */
+function occurrenceMonth(date: Date) {
+  return utcMonthRange(date.getUTCFullYear(), date.getUTCMonth());
+}
 
 @Injectable()
 export class FixedExpensesService {
@@ -40,11 +54,9 @@ export class FixedExpensesService {
   /** A fixed expense's cycle is the calendar month of its occurrence, not a
    * payroll period: the last period is open-ended, so every future occurrence
    * falls in it, next to the payments already made in it. */
-  private findPaymentForOccurrence(
-    transactions: Transaction[],
-    fixedExpenseId: number,
-    occurrenceDate: Date,
-  ) {
+  private findPaymentForOccurrence<
+    T extends Pick<Transaction, 'fixedExpenseId' | 'date'>,
+  >(transactions: T[], fixedExpenseId: number, occurrenceDate: Date) {
     return transactions.find(
       (transaction) =>
         transaction.fixedExpenseId === fixedExpenseId &&
@@ -55,11 +67,12 @@ export class FixedExpensesService {
 
   /** `localToday`: the user's date (YYYY-MM-DD), see resolveReferenceDate. */
   async findAllForUser(userId: number, localToday?: string) {
+    const today = resolveReferenceDate(localToday, new Date());
+    const { from, to } = occurrenceMonth(today);
     const [fixedExpenses, transactions] = await Promise.all([
       this.fixedExpensesRepository.findManyByUser(userId),
-      this.transactionsService.findAllForUser(userId),
+      this.transactionsService.findFixedExpensePayments(userId, from, to),
     ]);
-    const today = resolveReferenceDate(localToday, new Date());
 
     return fixedExpenses.map((fixedExpense) => {
       const paidThisCycle = Boolean(
@@ -98,7 +111,9 @@ export class FixedExpensesService {
     fixedExpenses: FixedExpense[],
     date: Date,
   ) {
-    const transactions = await this.transactionsService.findAllForUser(userId);
+    const { from, to } = occurrenceMonth(date);
+    const transactions =
+      await this.transactionsService.findFixedExpensePayments(userId, from, to);
     return fixedExpenses.filter(
       ({ id }) => !this.findPaymentForOccurrence(transactions, id, date),
     );
@@ -118,17 +133,20 @@ export class FixedExpensesService {
     return this.fixedExpensesRepository.delete(id);
   }
 
-  async pay(id: number, userId: number, localToday?: string) {
-    const fixedExpense = await this.findOwnedOrThrow(id, userId);
-    const transactions = await this.transactionsService.findAllForUser(userId);
-    const occurrenceDate = resolveOccurrenceDate(
-      fixedExpense.dueDate,
-      resolveReferenceDate(localToday, new Date()),
+  /** Throws the 409 (with the existing payment as-is) if this cycle is
+   * already paid. Full rows, not findFixedExpensePayments, for that body. */
+  private async assertUnpaid(
+    userId: number,
+    fixedExpenseId: number,
+    occurrenceDate: Date,
+  ) {
+    const transactions = await this.transactionsService.findAllForUser(
+      userId,
+      occurrenceMonth(occurrenceDate),
     );
-
     const existing = this.findPaymentForOccurrence(
       transactions,
-      fixedExpense.id,
+      fixedExpenseId,
       occurrenceDate,
     );
 
@@ -138,13 +156,31 @@ export class FixedExpensesService {
         transaction: existing,
       });
     }
+  }
 
-    return this.transactionsService.create(userId, {
-      amount: fixedExpense.amount,
-      date: occurrenceDate,
-      category: fixedExpense.budgetCategory,
-      description: fixedExpense.name,
-      fixedExpenseId: fixedExpense.id,
-    });
+  async pay(id: number, userId: number, localToday?: string) {
+    const fixedExpense = await this.findOwnedOrThrow(id, userId);
+    const occurrenceDate = resolveOccurrenceDate(
+      fixedExpense.dueDate,
+      resolveReferenceDate(localToday, new Date()),
+    );
+    await this.assertUnpaid(userId, fixedExpense.id, occurrenceDate);
+
+    try {
+      return await this.transactionsService.create(userId, {
+        amount: fixedExpense.amount,
+        date: occurrenceDate,
+        category: fixedExpense.budgetCategory,
+        description: fixedExpense.name,
+        fixedExpenseId: fixedExpense.id,
+      });
+    } catch (error) {
+      // A concurrent pay of the same occurrence won the unique
+      // (fixed_expense_id, date) index: answer the same 409 as above.
+      if (isUniqueViolation(error)) {
+        await this.assertUnpaid(userId, fixedExpense.id, occurrenceDate);
+      }
+      throw error;
+    }
   }
 }
