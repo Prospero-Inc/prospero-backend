@@ -358,6 +358,28 @@ describe('iPhone Shortcuts (e2e, Postgres)', () => {
       expect(await prisma.merchantRule.count({ where: { userId } })).toBe(1);
     });
 
+    it('PATCH rejects null amount/date/category with a translated 400', async () => {
+      const { accessToken, token } = await createUser('patch-null');
+      const once = await shortcut(token, {
+        amount: '9.99',
+        merchant: 'Super Selectos',
+        card: 'BAC Visa',
+      }).expect(200);
+
+      for (const field of ['amount', 'date', 'category']) {
+        const res = await asUser(accessToken)
+          .patch(`/api/transactions/${once.body.transactionId}`)
+          .set('Accept-Language', 'es')
+          .send({ [field]: null })
+          .expect(400);
+        expect(JSON.stringify(res.body)).toContain('no puede estar vacío');
+      }
+      await asUser(accessToken)
+        .patch(`/api/transactions/${once.body.transactionId}`)
+        .send({ periodOverride: null })
+        .expect(200);
+    });
+
     it('answers a readable 400 for an invalid amount', async () => {
       const { token } = await createUser('bad');
 
