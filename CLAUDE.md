@@ -105,7 +105,8 @@ through its PostgREST API. Every migration that creates a table must also run
   sent to the client once and never stored. `POST /auth/refresh` (`RefreshTokenDto`, no
   `JwtAuthGuard` since the access token may already be expired) rotates on every call: it revokes
   the presented refresh token (`revokedAt` + `replacedByTokenHash`) and issues a brand new
-  access+refresh pair, so the client must always persist the newest refresh token. Presenting a
+  access+refresh pair (revocation first, a conditional `updateMany`, so of two parallel
+  refreshes with the same token only one gets a pair), so the client must always persist the newest refresh token. Presenting a
   refresh token that is already `revokedAt != null` is treated as reuse/theft and revokes *all* of
   that user's refresh tokens before responding 401. `POST /auth/logout` (`LogoutDto`, also no
   guard) revokes one token server-side and is idempotent (no error if it's unknown or already
@@ -185,7 +186,8 @@ through its PostgREST API. Every migration that creates a table must also run
   fall in it next to past payments). `pay()` uses this to find the current cycle's occurrence
   date, checks whether a `Transaction` with that `fixedExpenseId` is dated in the same UTC year
   and month (`ConflictException`/409 if so, to catch double-pay clicks), and otherwise creates
-  one dated at the occurrence — not at "today". `GET /fixed-expenses` reuses the identical
+  one dated at the occurrence — not at "today". A P2002 from a concurrent pay answers the same
+  409 body (only effective once a unique `(fixed_expense_id, date)` index exists, still pending). `GET /fixed-expenses` reuses the identical
   computation to annotate each item with `paidThisCycle: boolean`, so the frontend never
   reimplements occurrence logic. `FixedExpenseReminderScheduler` (daily, 6:00 a. m.
   `America/El_Salvador`, under the scheduler lock) sends one notification per user for the
@@ -261,6 +263,9 @@ through its PostgREST API. Every migration that creates a table must also run
   `VapidConfigService` disables push with one boot warning when missing/invalid.
 - **i18n** — `nestjs-i18n`, locale JSON under `src/i18n/{en,es}` for both validation and
   exception messages; Swagger operation summaries in the codebase are written in Spanish.
+- **errors** — `PrismaExceptionFilter` (`module/prisma-exception.filter.ts`, global, next to
+  the i18n validation filter) maps Prisma errors nobody handled: P2025 → 404, P2002 → 409,
+  anything else → logged 500. Explicit `HttpException`s keep their own bodies.
 
 ### Product spec vs. current implementation
 
@@ -298,7 +303,10 @@ still use the Float columns.**
 `scheduler_locks` (atomic `INSERT … ON CONFLICT … WHERE locked_until < NOW()`), not a Postgres
 advisory lock — production uses a transaction-mode pooler where session locks don't hold. Jobs:
 Gmail sync (hourly at minute 5, off the 06:00 reminders; 3 accounts in parallel via `mapWithConcurrency`), refresh-token cleanup,
-money integrity.
+money integrity. Each Gmail connection's sync (cron or `POST /gmail-sync/sync-now`) also runs
+under a per-user lease `gmail-sync:user:<id>`, and a Gmail expense is created in one
+`$transaction` with its `ProcessedEmail` (the unique `(userId, gmailMessageId)` rolls a
+concurrent duplicate back).
 
 ### Health and deploy
 
