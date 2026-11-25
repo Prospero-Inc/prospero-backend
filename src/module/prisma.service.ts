@@ -1,9 +1,12 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { withCents } from './money/money-columns';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor() {
     super();
     // D3 double-write: every write that sets a Float amount also sets its
@@ -18,5 +21,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit() {
     await this.$connect();
+  }
+
+  /** Runs on SIGTERM (enableShutdownHooks in main.ts), after in-flight
+   * requests finish, so a deploy doesn't leave pooler connections open. */
+  async onModuleDestroy() {
+    await this.$disconnect();
   }
 }
