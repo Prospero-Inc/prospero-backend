@@ -361,6 +361,25 @@ describe('ShortcutTransactionsService', () => {
     });
   });
 
+  it('starts the four independent lookups together, not one after another', async () => {
+    const pending = new Promise<never>(() => undefined);
+    transactions.findDuplicateCandidates.mockReturnValue(pending);
+    rules.find.mockReturnValue(pending);
+
+    void service.record(principal, body(), NOW);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const sources = transactions.findDuplicateCandidates.mock.calls.map(
+      ([, filters]) => filters.sources[0],
+    );
+    expect(sources.sort()).toEqual([
+      MovementSource.Gmail,
+      MovementSource.Manual,
+      MovementSource.Shortcut,
+    ]);
+    expect(rules.find).toHaveBeenCalledWith(7, 'Puma');
+  });
+
   describe('input', () => {
     it('400 with a readable message for an unparseable or non-positive amount', async () => {
       for (const amount of ['abc', '0', -3]) {

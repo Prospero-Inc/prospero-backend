@@ -146,20 +146,21 @@ export class ShortcutTransactionsService {
       dto.card,
     );
 
-    const ownDuplicate =
-      (await this.findDoubleFire(userId, amount, merchant, now)) ??
-      (await this.findManualSameDay(userId, amount, date));
+    // Independent reads, fetched together; the decisions below keep the
+    // order of the flow described above.
+    const [doubleFire, manualSameDay, resolution, gmailDuplicate] =
+      await Promise.all([
+        this.findDoubleFire(userId, amount, merchant, now),
+        this.findManualSameDay(userId, amount, date),
+        this.resolveCategory(userId, merchant, card.defaultCategory),
+        this.findGmailNearby(userId, amount, date),
+      ]);
+
+    const ownDuplicate = doubleFire ?? manualSameDay;
     if (ownDuplicate) {
       return this.duplicate(ownDuplicate.id);
     }
 
-    const resolution = await this.resolveCategory(
-      userId,
-      merchant,
-      card.defaultCategory,
-    );
-
-    const gmailDuplicate = await this.findGmailNearby(userId, amount, date);
     if (gmailDuplicate) {
       if (
         resolution.kind === 'categorized' &&
