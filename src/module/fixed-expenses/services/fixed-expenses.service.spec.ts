@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { BudgetCategory } from '@prisma/client';
+import { BudgetCategory, Prisma } from '@prisma/client';
 import { FixedExpensesService } from './fixed-expenses.service';
 import { FixedExpensesRepository } from '../repositories/fixed-expenses.repository';
 import { TransactionsService } from '../../transactions/services/transactions.service';
@@ -283,6 +283,29 @@ describe('FixedExpensesService', () => {
 
       await expect(service.pay(1, 5)).rejects.toBeInstanceOf(ConflictException);
       expect(transactionsService.create).not.toHaveBeenCalled();
+    });
+
+    it('answers the same 409 when a concurrent pay wins the unique index', async () => {
+      repository.findOneOwned.mockResolvedValue(fixedExpense);
+      const existing = { id: 99, fixedExpenseId: 1, date: d('2026-09-09') };
+      // Empty on the first check; the concurrent payment exists afterwards.
+      transactionsService.findAllForUser
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([existing]);
+      transactionsService.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      const error = await service.pay(1, 5).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toEqual({
+        message: 'This fixed expense was already paid for the current cycle',
+        transaction: existing,
+      });
     });
 
     it("isn't blocked by last month's payment and dates the new one this month", async () => {
