@@ -118,6 +118,10 @@ export class SalaryService {
     return this.salaryRepository.findManyByUser(userId, filters);
   }
 
+  findPayrollDates(userId: number) {
+    return this.salaryRepository.findPayrollDatesByUser(userId);
+  }
+
   /** Used by `GET /salary` only — same split rationale as transactions'
    * `findAllForUserWithPossibleDuplicates`. */
   async findAllForUserWithPossibleDuplicates(

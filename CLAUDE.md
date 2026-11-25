@@ -148,13 +148,20 @@ through its PostgREST API. Every migration that creates a table must also run
   (`computePeriods`/`resolvePeriodForDate`/`resolveTransactionPeriod`/`estimateNextPaymentDate`,
   all pure functions, unit-tested in `period.util.spec.ts`). Because nothing is stored,
   editing/adding a payroll date automatically "moves" transactions between periods on the next
-  read — there's no explicit reassignment code anywhere. `PeriodsService.getCurrentPeriodSummary`
-  /`listPeriods` fetch a user's `Salary`+`Transaction` rows once and aggregate income/spend/budget
-  per period via `CustomStrategy`. `GET /periods/current` and `GET /periods` expose this.
+  read — there's no explicit reassignment code anywhere. Rows are grouped with
+  `assignToPeriods` (binary search over the period starts, same override rules as
+  `resolveTransactionPeriod`) — never filter rows once per period, that was O(P²·T).
+  `listPeriods` reads the whole history (it totals every period; `recentTransactions` only for the
+  open one); `/periods/current`, `/periods/transactions` and `/periods/salary` build the periods
+  from the Payroll dates alone and read only the target period's date range **plus every
+  transaction with a `periodOverride`** (`includeOverridden`), since an overridden row can count
+  toward a period its date isn't in. `/periods/month` reads only that month.
   **Timezone note:** all date math here uses hand-rolled UTC helpers, not `date-fns`'s
-  `startOfDay`/`addDays`/`addMonths` — those operate in the process's local timezone, which would
-  make period boundaries depend on server TZ. Don't reintroduce plain date-fns calls into this
-  file for date-only (no time-of-day) arithmetic.
+  `startOfDay`/`addDays`/`addMonths`/`differenceInCalendarDays` — those operate in the process's
+  local timezone, which would make period boundaries (and day counts) depend on server TZ. Don't
+  reintroduce plain date-fns calls into this file for date-only (no time-of-day) arithmetic.
+  "Today" for `daysElapsed`/`estimatedDaysRemaining` is `resolveLocalDate(now, APP_TIME_ZONE)`
+  from `src/lib/dates/local-date.ts`.
 - **transactions** — real CRUD: `TransactionsController` (`JwtAuthGuard` on the whole
   controller) exposes `POST/GET /transactions` and `PATCH/DELETE /transactions/:id`, backed by
   `TransactionsRepository` (Prisma) and `TransactionsService`. Every read/write is scoped to

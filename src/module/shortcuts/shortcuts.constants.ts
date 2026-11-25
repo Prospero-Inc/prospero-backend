@@ -1,3 +1,5 @@
+import { APP_TIME_ZONE } from 'src/lib/dates/local-date';
+
 /** Every raw token starts with this, so a leaked one is recognizable (and
  * greppable by secret scanners). */
 export const SHORTCUT_TOKEN_PREFIX = 'prs_';
@@ -17,7 +19,7 @@ export const DOUBLE_FIRE_WINDOW_MS = 2 * 60 * 1000;
 
 /** Users are in El Salvador (UTC-6, no DST); dates are stored as that wall
  * clock written into the UTC fields, like the Gmail parsers do. */
-export const SHORTCUT_TIME_ZONE = 'America/El_Salvador';
+export const SHORTCUT_TIME_ZONE = APP_TIME_ZONE;
 
 /** How many recent classified rows the suggestedCategory heuristic scans. */
 export const SUGGESTION_SAMPLE_SIZE = 500;

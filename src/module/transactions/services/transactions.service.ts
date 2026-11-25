@@ -161,6 +161,14 @@ export class TransactionsService {
     return this.transactionsRepository.findManyByUser(userId, filters);
   }
 
+  findFixedExpensePayments(userId: number, from: Date, to: Date) {
+    return this.transactionsRepository.findFixedExpensePayments(
+      userId,
+      from,
+      to,
+    );
+  }
+
   /** Used by `GET /transactions` only — plain `findAllForUser` plus the
    * `possibleGmailDuplicate` badge computed from `ProcessedEmail`. Kept
    * separate from `findAllForUser` so internal high-frequency callers

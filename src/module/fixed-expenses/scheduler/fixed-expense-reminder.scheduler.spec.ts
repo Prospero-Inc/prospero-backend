@@ -17,7 +17,7 @@ const fixedExpense = (id: number, userId: number, dueDate: string) => ({
 
 describe('FixedExpenseReminderScheduler', () => {
   let repository: { findManyWithReminder: jest.Mock };
-  let transactionsService: { findAllForUser: jest.Mock };
+  let transactionsService: { findFixedExpensePayments: jest.Mock };
   let notificationsService: { notifyFixedExpensesDue: jest.Mock };
   let schedulerLock: { runExclusive: jest.Mock };
   let scheduler: FixedExpenseReminderScheduler;
@@ -29,7 +29,9 @@ describe('FixedExpenseReminderScheduler', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     repository = { findManyWithReminder: jest.fn().mockResolvedValue([]) };
-    transactionsService = { findAllForUser: jest.fn().mockResolvedValue([]) };
+    transactionsService = {
+      findFixedExpensePayments: jest.fn().mockResolvedValue([]),
+    };
     notificationsService = {
       notifyFixedExpensesDue: jest.fn().mockResolvedValue(undefined),
     };
@@ -82,7 +84,7 @@ describe('FixedExpenseReminderScheduler', () => {
     const paid = fixedExpense(1, 5, '2024-01-30');
     const unpaid = fixedExpense(2, 5, '2024-01-30');
     repository.findManyWithReminder.mockResolvedValue([paid, unpaid]);
-    transactionsService.findAllForUser.mockResolvedValue([
+    transactionsService.findFixedExpensePayments.mockResolvedValue([
       { fixedExpenseId: 1, date: d('2026-11-30') },
       { fixedExpenseId: 2, date: d('2026-10-30') },
     ]);
@@ -101,7 +103,7 @@ describe('FixedExpenseReminderScheduler', () => {
     repository.findManyWithReminder.mockResolvedValue([
       fixedExpense(1, 5, '2024-01-30'),
     ]);
-    transactionsService.findAllForUser.mockResolvedValue([
+    transactionsService.findFixedExpensePayments.mockResolvedValue([
       { fixedExpenseId: 1, date: d('2026-11-30') },
     ]);
     setToday('2026-11-30');
