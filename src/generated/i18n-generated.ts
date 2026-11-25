@@ -20,6 +20,7 @@ export type I18nTranslations = {
         "forbidden": string;
         "userInactive": string;
         "notFound": string;
+        "conflict": string;
         "itemExpired": string;
         "emailLooksGood": string;
         "unsupportedFileType": string;

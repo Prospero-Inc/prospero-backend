@@ -61,6 +61,18 @@ describe('SalaryService', () => {
     expect(result).toEqual({ message: 'Salario creado exitosamente' });
   });
 
+  it('lets a repository error through to the global filters (no 500 wrapper, no console.log)', async () => {
+    const error = new Error('db down');
+    repository.create.mockRejectedValue(error);
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await expect(
+      service.create(5, { amount: 2000, date: new Date('2026-09-13') } as any),
+    ).rejects.toBe(error);
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it('deletes a salary owned by the user', async () => {
     repository.findOneOwned.mockResolvedValue({ id: 1, userId: 5 });
     repository.delete.mockResolvedValue({ id: 1 });

@@ -13,6 +13,7 @@
     "forbidden": "Access to the requested resource is forbidden!",
     "userInactive": "User is inactive please contact your administrator for further help!",
     "notFound": "Data not found!",
+    "conflict": "The record already exists!",
     "itemExpired": "{item} has expired!",
     "emailLooksGood": "Email looks good!",
     "unsupportedFileType": "Uploaded file type is not supported!",

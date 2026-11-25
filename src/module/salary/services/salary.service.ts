@@ -90,13 +90,8 @@ export class SalaryService {
       createSalaryDto,
     );
 
-    try {
-      await this.salaryRepository.create(userId, createSalaryDto);
-      return { message: 'Salario creado exitosamente' };
-    } catch (error) {
-      console.log(error);
-      throw new InternalServerErrorException('Error al crear el salario');
-    }
+    await this.salaryRepository.create(userId, createSalaryDto);
+    return { message: 'Salario creado exitosamente' };
   }
 
   /**
