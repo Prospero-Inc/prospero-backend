@@ -6,6 +6,7 @@ import {
   ProcessedEmailResult,
 } from '@prisma/client';
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
+import { SchedulerLockService } from 'src/module/scheduler-lock/scheduler-lock.service';
 import { FinancialInstitutionsService } from 'src/module/financial-institutions/services/financial-institutions.service';
 import { TransactionsService } from 'src/module/transactions/services/transactions.service';
 import { GmailApiClient } from './gmail-api-client.service';
@@ -23,7 +24,10 @@ import {
   buildGmailSearchQuery,
   resolveSyncWindowStart,
 } from '../utils/sync-window.util';
-import { PROCESSED_EMAIL_REASONS } from '../gmail-sync.constants';
+import {
+  GMAIL_SYNC_USER_LOCK_TTL_MS,
+  PROCESSED_EMAIL_REASONS,
+} from '../gmail-sync.constants';
 
 type SenderWithInstitution = InstitutionSender & {
   institution: FinancialInstitution;
@@ -54,9 +58,26 @@ export class GmailSyncOrchestrator {
     private readonly processedEmailRepository: ProcessedEmailRepository,
     private readonly duplicateDetector: DuplicateDetectorService,
     private readonly transactionsService: TransactionsService,
+    private readonly schedulerLock: SchedulerLockService,
   ) {}
 
+  /** One sync per user at a time, whether it comes from the hourly cron or
+   * from sync-now; a run that finds the user's lease taken does nothing. */
   async syncConnection(
+    connection: GmailConnection,
+  ): Promise<SyncConnectionResult> {
+    let result: SyncConnectionResult = { transactionsCreated: 0 };
+    await this.schedulerLock.runExclusive(
+      `gmail-sync:user:${connection.userId}`,
+      GMAIL_SYNC_USER_LOCK_TTL_MS,
+      async () => {
+        result = await this.runSync(connection);
+      },
+    );
+    return result;
+  }
+
+  private async runSync(
     connection: GmailConnection,
   ): Promise<SyncConnectionResult> {
     const now = new Date();
@@ -297,23 +318,31 @@ export class GmailSyncOrchestrator {
       return false;
     }
 
-    const created = await this.transactionsService.createFromGmail(userId, {
-      amount: parsed.amount,
-      date: parsed.date,
-      description: parsed.notes,
-      institutionId,
-      gmailMessageId: messageId,
-    });
-
-    await this.recordOutcome({
-      userId,
-      gmailMessageId: messageId,
-      senderEmail,
-      result: ProcessedEmailResult.Created,
-      parserVersion,
-      relatedTransactionId: created.id,
-    });
-    return true;
+    // Expense and audit row commit together: a concurrent sync that already
+    // recorded this email makes this one roll back instead of duplicating it.
+    const recorded =
+      await this.processedEmailRepository.createWithRelatedTransaction(
+        {
+          userId,
+          gmailMessageId: messageId,
+          senderEmail,
+          result: ProcessedEmailResult.Created,
+          parserVersion,
+        },
+        (tx) =>
+          this.transactionsService.createFromGmail(
+            userId,
+            {
+              amount: parsed.amount,
+              date: parsed.date,
+              description: parsed.notes,
+              institutionId,
+              gmailMessageId: messageId,
+            },
+            tx,
+          ),
+      );
+    return recorded !== null;
   }
 
   /**

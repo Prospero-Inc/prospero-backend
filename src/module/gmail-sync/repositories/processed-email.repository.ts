@@ -28,6 +28,10 @@ export interface CreateProcessedEmailData {
 /** Prisma's unique-constraint-violation error code. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 
+const isUniqueViolation = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === UNIQUE_CONSTRAINT_VIOLATION;
+
 @Injectable()
 export class ProcessedEmailRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -58,10 +62,32 @@ export class ProcessedEmailRepository {
     try {
       return await this.prisma.processedEmail.create({ data });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === UNIQUE_CONSTRAINT_VIOLATION
-      ) {
+      if (isUniqueViolation(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Creates the row `createRelated` returns (e.g. the Gmail expense) and the
+   * audit row pointing at it in one transaction. If another sync already
+   * recorded this email, the audit insert's unique violation rolls the
+   * related row back too and this returns null ("already processed").
+   */
+  async createWithRelatedTransaction(
+    data: CreateProcessedEmailData,
+    createRelated: (tx: Prisma.TransactionClient) => Promise<{ id: number }>,
+  ): Promise<ProcessedEmail | null> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const related = await createRelated(tx);
+        return tx.processedEmail.create({
+          data: { ...data, relatedTransactionId: related.id },
+        });
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
         return null;
       }
       throw error;

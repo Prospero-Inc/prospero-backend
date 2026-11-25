@@ -7,6 +7,7 @@ import { ProcessedEmailRepository } from '../repositories/processed-email.reposi
 import { GmailOAuthService } from 'src/module/gmail/services/gmail-oauth.service';
 import { FinancialInstitutionsService } from 'src/module/financial-institutions/services/financial-institutions.service';
 import { TransactionsService } from 'src/module/transactions/services/transactions.service';
+import { SchedulerLockService } from 'src/module/scheduler-lock/scheduler-lock.service';
 import { PROCESSED_EMAIL_REASONS } from '../gmail-sync.constants';
 
 const AGRICOLA_SENDER = {
@@ -57,6 +58,14 @@ describe('GmailSyncOrchestrator', () => {
   let processedEmailRepository: {
     findByUserAndMessage: jest.Mock;
     create: jest.Mock;
+    createWithRelatedTransaction: jest.Mock;
+  };
+  const tx = { fake: 'transaction client' };
+  const schedulerLock = {
+    runExclusive: jest.fn(async (_name, _ttl, job) => {
+      await job();
+      return true;
+    }),
   };
   let duplicateDetector: {
     findManualDuplicate: jest.Mock;
@@ -82,6 +91,11 @@ describe('GmailSyncOrchestrator', () => {
     processedEmailRepository = {
       findByUserAndMessage: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({ id: 1 }),
+      // Runs the callback like the real $transaction, with a fake client.
+      createWithRelatedTransaction: jest.fn(async (data, createRelated) => {
+        const related = await createRelated(tx);
+        return { id: 1, ...data, relatedTransactionId: related.id };
+      }),
     };
     duplicateDetector = {
       findManualDuplicate: jest.fn().mockResolvedValue(null),
@@ -106,6 +120,7 @@ describe('GmailSyncOrchestrator', () => {
         },
         { provide: DuplicateDetectorService, useValue: duplicateDetector },
         { provide: TransactionsService, useValue: transactionsService },
+        { provide: SchedulerLockService, useValue: schedulerLock },
       ],
     }).compile();
 
@@ -125,14 +140,23 @@ describe('GmailSyncOrchestrator', () => {
         institutionId: 10,
         gmailMessageId: 'msg-1',
       }),
+      tx,
     );
-    expect(processedEmailRepository.create).toHaveBeenCalledWith(
+    expect(
+      processedEmailRepository.createWithRelatedTransaction,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 7,
         gmailMessageId: 'msg-1',
         result: ProcessedEmailResult.Created,
-        relatedTransactionId: 100,
       }),
+      expect.any(Function),
+    );
+    expect(processedEmailRepository.create).not.toHaveBeenCalled();
+    expect(schedulerLock.runExclusive).toHaveBeenCalledWith(
+      'gmail-sync:user:7',
+      expect.any(Number),
+      expect.any(Function),
     );
     expect(gmailOAuthService.markSynced).toHaveBeenCalledWith(
       7,
@@ -141,6 +165,27 @@ describe('GmailSyncOrchestrator', () => {
     // Drives GmailSyncScheduler's decision to notify the user — see
     // notifications module.
     expect(result).toEqual({ transactionsCreated: 1 });
+  });
+
+  it('counts nothing when a concurrent sync already recorded the email', async () => {
+    gmailApiClient.listMessageIds.mockResolvedValue([{ id: 'msg-1' }]);
+    gmailApiClient.getMessage.mockResolvedValue(buildRecargaMessage());
+    processedEmailRepository.createWithRelatedTransaction.mockResolvedValue(
+      null,
+    );
+
+    const result = await orchestrator.syncConnection(connection);
+
+    expect(result).toEqual({ transactionsCreated: 0 });
+  });
+
+  it('does nothing while another sync of the same user holds the lease', async () => {
+    schedulerLock.runExclusive.mockResolvedValueOnce(false);
+
+    const result = await orchestrator.syncConnection(connection);
+
+    expect(gmailApiClient.listMessageIds).not.toHaveBeenCalled();
+    expect(result).toEqual({ transactionsCreated: 0 });
   });
 
   it('counts one transaction per message created across a batch of several messages', async () => {
