@@ -298,7 +298,7 @@ still use the Float columns.**
 `SchedulerLockService.runExclusive(name, ttl, job)` (`module/scheduler-lock`): a lease row in
 `scheduler_locks` (atomic `INSERT … ON CONFLICT … WHERE locked_until < NOW()`), not a Postgres
 advisory lock — production uses a transaction-mode pooler where session locks don't hold. Jobs:
-Gmail sync (hourly, 3 accounts in parallel via `mapWithConcurrency`), refresh-token cleanup,
+Gmail sync (hourly at minute 5, off the 06:00 reminders; 3 accounts in parallel via `mapWithConcurrency`), refresh-token cleanup,
 money integrity.
 
 ### Health and deploy
