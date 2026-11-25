@@ -117,7 +117,6 @@ export class GmailSyncOrchestrator {
           messageId,
           accessToken,
           sendersByEmail,
-          connection.lastSyncAt,
         );
         if (created) {
           transactionsCreated += 1;
@@ -138,7 +137,6 @@ export class GmailSyncOrchestrator {
     messageId: string,
     accessToken: string,
     sendersByEmail: Map<string, SenderWithInstitution>,
-    lastSyncAt: Date | null,
   ): Promise<boolean> {
     const alreadyProcessed =
       await this.processedEmailRepository.findByUserAndMessage(
@@ -157,16 +155,6 @@ export class GmailSyncOrchestrator {
         messageId,
       );
       senderEmail = extractSenderEmail(message);
-
-      // Pure network-level noise filter from after:'s day granularity, not a
-      // processing decision — no audit row, since nothing was actually
-      // evaluated. The idempotency check above is the real safety net.
-      if (lastSyncAt) {
-        const internalDate = new Date(Number(message.internalDate));
-        if (internalDate.getTime() <= lastSyncAt.getTime()) {
-          return false;
-        }
-      }
 
       const sender = senderEmail ? sendersByEmail.get(senderEmail) : undefined;
       if (!sender) {

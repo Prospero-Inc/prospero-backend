@@ -165,4 +165,23 @@ describe('Gmail sync (Postgres)', () => {
     expect(audit).toHaveLength(1);
     expect(audit[0].relatedTransactionId).toBe(rows[0].id);
   });
+
+  it('processes a never-seen email Gmail indexed after the last sync', async () => {
+    const orchestrator = await build();
+    const lastSyncAt = new Date();
+    // Delivered an hour before the last sync, but only listed now.
+    const message = recargaMessage(
+      `late-${Date.now()}`,
+      new Date(lastSyncAt.getTime() - 60 * 60 * 1000),
+    );
+    gmail.listMessageIds.mockResolvedValue([{ id: message.id }]);
+    gmail.getMessage.mockResolvedValue(message);
+
+    const { transactionsCreated } = await orchestrator.syncConnection(
+      connection(lastSyncAt),
+    );
+
+    expect(transactionsCreated).toBe(1);
+    expect(await gmailRows(message.id)).toHaveLength(1);
+  });
 });

@@ -1,8 +1,8 @@
 const BACKFILL_WINDOW_DAYS = 30;
 /** Gmail's `after:` operator has day granularity, so an incremental sync
- * always looks one extra day back and relies on the in-memory `internalDate`
- * filter (plus the `ProcessedEmail` idempotency check) to discard what it
- * already saw. */
+ * always looks one extra day back and relies on the `ProcessedEmail`
+ * idempotency check to skip what it already saw. No `internalDate` cutoff:
+ * Gmail can index an email after the sync that should have seen it. */
 const INCREMENTAL_LOOKBACK_DAYS = 1;
 
 function startOfUTCDay(date: Date): Date {
