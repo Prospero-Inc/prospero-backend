@@ -367,6 +367,13 @@ describe('PeriodsService period summaries', () => {
     });
   });
 
+  it('fills recentTransactions only for the open period (B19)', async () => {
+    const result = await buildService().listPeriods(5);
+    expect(result.map((p) => p.recentTransactions.length)).toEqual([
+      3, 0, 0, 0,
+    ]);
+  });
+
   it('agrees with listPeriods on the current period', async () => {
     const service = buildService();
     const [current, list] = await Promise.all([

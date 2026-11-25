@@ -46,6 +46,8 @@ export interface PeriodSummary {
   daysElapsed: number | null;
   estimatedNextPaymentDate: Date | null;
   estimatedDaysRemaining: number | null;
+  /** Up to 10, newest first; only the open period fills it (the dashboard
+   * reads it from /periods/current), closed ones return `[]`. */
   recentTransactions: Transaction[];
 }
 
@@ -196,9 +198,11 @@ export class PeriodsService {
       estimatedDaysRemaining: estimatedNextPaymentDate
         ? differenceInUTCDays(estimatedNextPaymentDate, today)
         : null,
-      recentTransactions: [...periodTransactions]
-        .sort((a, b) => b.date.getTime() - a.date.getTime())
-        .slice(0, 10),
+      recentTransactions: period.isOpen
+        ? [...periodTransactions]
+            .sort((a, b) => b.date.getTime() - a.date.getTime())
+            .slice(0, 10)
+        : [],
     };
   }
 
