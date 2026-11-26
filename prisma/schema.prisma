@@ -87,6 +87,7 @@ model Transaction {
   @@index([userId, date], name: "transaction_user_date_idx")
   @@index([walletCardId])
   @@index([fixedExpenseId, date])
+  // Also a partial unique index on (fixed_expense_id, date) WHERE fixed_expense_id IS NOT NULL — see migration 20261126000000; not expressible here.
   @@index([institutionId])
   @@map("transactions")
 }
